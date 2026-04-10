@@ -1,6 +1,7 @@
 [tool.ruff]
 target-version = "py311"
 line-length = 120
+extend-exclude = ["_legacy_src", "_legacy_scripts"]
 
 [tool.ruff.lint]
 select = [
@@ -24,6 +25,7 @@ ignore = [
     "B008",  # function call in default arg (FastAPI Depends)
     "B904",  # raise from (기존 코드)
     "UP007", # X | Y union syntax (Python 3.9 호환)
+    "UP045", # X | None Optional syntax (Optional[str] 사용 정책 — CLAUDE.md)
     "E702",  # multiple statements on one line (기존 코드)
     "F811",  # redefinition (@tool decorator)
 ]

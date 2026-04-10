@@ -1,0 +1,30 @@
+{
+  "$schema": "https://raw.githubusercontent.com/microsoft/pyright/main/packages/vscode-pyright/schemas/pyrightconfig.schema.json",
+  "include": ["src", "scripts"],
+  "extraPaths": [".."],
+  "exclude": [
+    "**/__pycache__",
+    "**/.ruff_cache",
+    "**/venv",
+    "venv",
+    "data",
+    "monitoring",
+    "_legacy_src",
+    "_legacy_scripts"
+  ],
+  "pythonVersion": "3.11",
+  "pythonPlatform": "Linux",
+  "venvPath": ".",
+  "venv": "venv",
+  "typeCheckingMode": "basic",
+  "useLibraryCodeForTypes": true,
+  "reportMissingImports": "warning",
+  "reportMissingTypeStubs": "none",
+  "reportGeneralTypeIssues": "error",
+  "reportOptionalMemberAccess": "warning",
+  "reportOptionalSubscript": "warning",
+  "reportPrivateImportUsage": "none",
+  "_comment_lib_stubs": "langchain/anthropic 등 third-party stub 미스매치는 warning으로 강등. 진짜 코드 버그(ReturnType/Operator/Attribute)만 error로 차단",
+  "reportCallIssue": "warning",
+  "reportArgumentType": "warning"
+}
