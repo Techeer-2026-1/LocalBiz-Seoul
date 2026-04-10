@@ -1,0 +1,66 @@
+name: 🐛 Bug
+description: 재현 가능한 결함
+labels: ["bug"]
+body:
+  - type: textarea
+    id: summary
+    attributes:
+      label: 한 줄 요약
+      placeholder: 무엇이 어떻게 안 되는지 1줄
+    validations:
+      required: true
+
+  - type: textarea
+    id: repro
+    attributes:
+      label: 재현 절차
+      description: 누가 와도 같은 결함을 볼 수 있도록 step 순서대로
+      value: |
+        1.
+        2.
+        3.
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: 기대한 동작
+    validations:
+      required: true
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: 실제 동작
+      description: 에러 메시지·스크린샷·로그 첨부
+    validations:
+      required: true
+
+  - type: dropdown
+    id: phase
+    attributes:
+      label: Phase
+      options:
+        - P1 (핵심)
+        - P2 (확장)
+        - P3 (피드백)
+        - ETL
+        - Infra/하네스
+    validations:
+      required: true
+
+  - type: textarea
+    id: env
+    attributes:
+      label: 환경
+      value: |
+        - OS:
+        - Python:
+        - branch / commit:
+        - validate.sh 결과: ✅ / ❌
+
+  - type: textarea
+    id: workaround
+    attributes:
+      label: 임시 우회 (있으면)
