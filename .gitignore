@@ -1,0 +1,82 @@
+# =================================================================
+# AnyWay (LocalBiz Intelligence) — top-level .gitignore
+# backend/ 자체에도 .gitignore 가 있어 backend 전용 항목은 거기서 처리.
+# 본 파일은 monorepo 루트의 비밀·캐시·대용량·OS·하네스 상태를 처리.
+# =================================================================
+
+# ─── Secrets / 환경변수 ──────────────────────────────────────────
+.env
+.env.*
+!.env.example
+*.pem
+*.key
+credentials.json
+token.json
+*.secret
+
+# postgres MCP는 ${DB_PASSWORD} env var로 password 주입하므로 .mcp.json은 추적 OK.
+# 만약 .mcp.json에 평문 비밀이 들어가면 즉시 추가:
+# .mcp.json
+
+# ─── Python ──────────────────────────────────────────────────────
+__pycache__/
+*.py[cod]
+*$py.class
+*.egg-info/
+dist/
+build/
+.eggs/
+
+# venv는 backend/venv 만 사용, 루트엔 일반적으로 없음. 그래도 안전 차원
+venv/
+.venv/
+env/
+
+# ─── Cache ──────────────────────────────────────────────────────
+.pytest_cache/
+.ruff_cache/
+.mypy_cache/
+.pyright/
+.coverage
+htmlcov/
+.tox/
+
+# ─── 하네스 (Phase 2-bis / Phase 3) 런타임 상태 ───────────────────
+# .sisyphus/plans/, .sisyphus/notepads/ 는 추적
+# .sisyphus/state/는 휘발성 (hook 간 공유) → ignore
+.sisyphus/state/*
+!.sisyphus/state/.gitkeep
+
+# ─── 데이터셋 / 산출물 (대용량) ────────────────────────────────────
+csv_data/
+profile_report.md
+gdown_log.txt
+*.csv.bak
+data/
+out/
+artifacts/
+
+# ─── 백업 ───────────────────────────────────────────────────────
+*.bak
+*.backup
+CLAUDE.md.full.bak
+
+# ─── IDE / 에디터 ────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*.swo
+*~
+
+# ─── OS ─────────────────────────────────────────────────────────
+.DS_Store
+.DS_Store?
+._*
+Thumbs.db
+desktop.ini
+
+# ─── 임시/로그 ───────────────────────────────────────────────────
+*.log
+*.tmp
+.tmp/
+tmp/

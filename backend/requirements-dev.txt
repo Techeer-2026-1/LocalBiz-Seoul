@@ -3,9 +3,14 @@
 #
 # 런타임 의존성은 requirements.txt 참조.
 
+# Linter + formatter (Phase 1 Hard-constraint)
+ruff==0.15.9
+
 # Type checker (Phase 1 Hard-constraint)
 pyright==1.1.405
 
+# Git hook manager
+pre-commit==4.0.1
+
 # 향후 추가 예정 (Phase 5+):
-# pre-commit  -- 이미 .pre-commit-config.yaml 사용 중
 # pytest-cov  -- 커버리지 리포트

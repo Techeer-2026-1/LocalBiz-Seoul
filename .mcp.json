@@ -1,0 +1,16 @@
+{
+  "_comment": "Phase 2 Harness — MCP server config. postgres는 read-only 강제 (default_transaction_read_only=on). 쓰기는 backend/scripts/run_migration.py로만.",
+  "mcpServers": {
+    "postgres": {
+      "command": "npx",
+      "args": [
+        "-y",
+        "@modelcontextprotocol/server-postgres",
+        "postgresql://etl@REDACTED_DB_HOST:5432/postgres?options=-c%20default_transaction_read_only%3Don"
+      ],
+      "env": {
+        "PGPASSWORD": "${DB_PASSWORD}"
+      }
+    }
+  }
+}
