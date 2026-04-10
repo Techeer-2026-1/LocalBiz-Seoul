@@ -8,6 +8,40 @@
 
 ---
 
+## 🚀 Quick Start (clone 직후 30초 안내)
+
+```bash
+# 1. clone
+gh repo clone Techeer-2026-1/AnyWay && cd AnyWay
+
+# 2. 1Password vault 열기 → "AnyWay-Dev-Shared" 항목 (PM 이정에게 vault 초대 요청)
+
+# 3. backend venv + 의존성
+cd backend
+python3.11 -m venv venv
+source venv/bin/activate
+pip install -r requirements.txt -r requirements-dev.txt
+
+# 4. .env 작성 (1Password 값 채우기)
+cp .env.example .env
+$EDITOR .env
+
+# 5. shell rc 에 DB_PASSWORD export (postgres MCP 용)
+echo 'export DB_PASSWORD="<1Password 값>"' >> ~/.zshrc
+source ~/.zshrc
+
+# 6. 검증 + Claude Code 첫 prompt
+cd ..
+./validate.sh             # → ✅ 모든 검증 통과
+claude                    # → "places 테이블 컬럼 조회해줘" 입력
+```
+
+**막히면**: [`docs/dev-environment.md`](docs/dev-environment.md) 트러블슈팅 / [`CONTRIBUTING.md` § Hook 차단](CONTRIBUTING.md#hook-troubleshooting) / PM 이정 DM.
+
+자세한 단계별 설명은 [§ 6단계 Onboarding](#6단계-onboarding-목표-60분).
+
+---
+
 ## 한 단락 설명
 
 사용자가 자연어로 *"홍대에서 비 오는 날 갈 만한 분위기 카페"* 를 물으면, AnyWay는 12+1 intent로 분류 → 공통 쿼리 전처리 → PostGIS·k-NN 하이브리드 검색 → LangGraph 노드가 6 지표(만족도/접근성/청결도/가성비/분위기/전문성)로 추론 → 16종 응답 블록 (place/places/events/course/map_markers/chart/calendar/...)을 WebSocket으로 스트리밍한다. 코스 추천은 카테고리별 병렬 검색 → ST_DWithin → Greedy NN → OSRM 폴리라인까지. 데이터는 places 53만, events 7,301, place_analysis는 LLM 6 지표 채점 + Gemini 768d 임베딩으로 OpenSearch에 동기 인덱싱.
