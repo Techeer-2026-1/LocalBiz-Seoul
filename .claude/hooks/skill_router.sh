@@ -42,6 +42,10 @@ TRIGGERS = {
         "버그 ", "안 돌아가", "고쳐줘",
         "intent 추가", "응답 블록 추가", "노드 추가", "etl 추가",
         "/plan", "기획부터", "설계 먼저",
+        "추가하자", "추가해", "수정해", "수정하자", "변경해", "변경하자",
+        "갱신해", "갱신하자", "최신화", "정리해", "정리하자",
+        "바꿔", "고쳐", "만들자", "생성해", "생성하자",
+        "삭제해", "삭제하자", "검토해", "업데이트",
     ],
     "localbiz-erd-guard": [
         "테이블 추가", "컬럼 추가", "스키마 변경", "ddl",
@@ -109,16 +113,9 @@ with open(pending_path, "a", encoding="utf-8") as f:
         if (session_id, skill) not in existing:
             f.write(f"{session_id}\t{skill}\n")
 
-print("=" * 60)
-print("[Phase 2-bis SKILL ROUTER] 트리거 감지")
-print("=" * 60)
-print(f"매칭된 스킬: {', '.join(triggered)}")
-print("")
-print("MANDATORY: 위 스킬을 Skill 도구로 호출한 뒤 작업을 시작하세요.")
-print("각 스킬 디렉터리의 SKILL.md(L1) → REFERENCE.md(L2) 순서로 Read.")
-print("")
-print("우회가 필요하면 사용자에게 '/force' 입력을 요청하세요.")
-print("Edit/Write/Bash는 해당 스킬을 호출하지 않으면 PreToolUse hook이 차단합니다.")
-print("=" * 60)
+# silent: stdout 출력 없음. pending_skills.txt 파일 기록만 하고 종료.
+# PreToolUse hook (pre_edit_skill_check.sh)이 매 Edit/Write/Bash 호출 직전에 이 파일을
+# 검사해서 미호출 스킬이 있으면 차단 — 차단 메시지에 매칭 스킬 정보 포함되므로
+# Claude가 그때 SKILL 도구로 호출하면 됨. UserPromptSubmit 단계의 인젝션은 불필요.
 sys.exit(0)
 PY

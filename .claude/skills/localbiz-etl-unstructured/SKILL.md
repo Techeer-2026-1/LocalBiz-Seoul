@@ -1,6 +1,6 @@
 ---
 name: localbiz-etl-unstructured
-description: Naver/Google 리뷰·가격·이미지 캡션을 Gemini 6 지표로 채점, 768d 임베딩, place_analysis/OS place_reviews 적재. embed_utils 공용, --naver-only.
+description: Naver Blog 리뷰 크롤링 → Gemini 6 지표 런타임 채점 + 768d 임베딩 → OS place_reviews 적재. embed_utils 공용, --naver-only. (v2: place_analysis DROP, 런타임 lazy)
 phase: 2
 project: localbiz-intelligence
 mcp:
@@ -14,7 +14,7 @@ mcp:
 ## 발동 조건
 
 - "비정형", "리뷰 분석", "리뷰 적재", "가격 수집", "이미지 캡셔닝", "임베딩"
-- "Naver Blog", "Google Reviews", "place_analysis", "place_reviews"
+- "Naver Blog", "Google Reviews", "place_reviews", "crawl_reviews"
 - "batch_review", "load_place_reviews", "collect_price", "load_image_captions"
 
 ## L2 본문

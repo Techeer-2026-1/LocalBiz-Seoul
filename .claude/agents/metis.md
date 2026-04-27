@@ -1,6 +1,7 @@
 ---
 name: metis
 description: Phase 3 전술적 분석가. .sisyphus/plans/*/plan.md 초안의 갭·숨겨진 의도·AI Slop·오버엔지니어링을 탐지한다. 사용자가 plan 검토를 요청하거나 plan.md 작성 직후 자동 호출된다.
+tools: Read, Glob, Grep
 model: opus
 ---
 

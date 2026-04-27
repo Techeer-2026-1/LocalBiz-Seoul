@@ -12,41 +12,50 @@
 { ""access_token"": ""string"",
   ""token_type"": ""bearer"",
   ""user"": {
-    ""user_id"": ""uuid"",
+    ""user_id"": ""string (BIGINT)"",
     ""email"": ""string"",
     ""nickname"": ""string"",
     ""created_at"": ""ISO 8601""
-  } }",
+  } }
+
+※ user_id는 ERD v6.2에서 BIGINT(불변식 #1). JSON은 JS Number 정밀도 한계(2^53)를 피하기 위해 문자열로 직렬화.",
 로그인,사용자,POST,/api/v1/auth/login,,"Request Body:
 { ""email"": ""string"",
   ""password"": ""string"" }","Response (200 OK)
 { ""access_token"": ""string"",
   ""token_type"": ""bearer"",
   ""user"": {
-    ""user_id"": ""uuid"",
+    ""user_id"": ""string (BIGINT)"",
     ""email"": ""string"",
     ""nickname"": ""string""
-  } }",
+  } }
+
+※ user_id는 ERD v6.2에서 BIGINT(불변식 #1). JSON은 문자열로 직렬화.",
 Google 소셜 로그인,사용자,POST,/api/v1/auth/google,,"Request Body:
 { ""id_token"": ""string"" }","Response (200 OK)
 { ""access_token"": ""string"",
   ""token_type"": ""bearer"",
   ""user"": {
-    ""user_id"": ""uuid"",
+    ""user_id"": ""string (BIGINT)"",
     ""email"": ""string"",
     ""nickname"": ""string""
   },
-  ""is_new_user"": true }",
+  ""is_new_user"": true }
+
+※ user_id는 ERD v6.2에서 BIGINT(불변식 #1). JSON은 문자열로 직렬화.
+※ Google Calendar scope가 기본 요청에 포함되면 refresh_token을 http://users.google_calendar_refresh_token에 저장 (Gap #G4 옵션 A, 사용자 승인 대기).",
 비밀번호 변경,사용자,PATCH,/api/v1/users/me/password,,"Request Body:
 { ""old_password"": ""string"",
   ""new_password"": ""string"" }","Response (200 OK)
 { ""message"": ""Password updated"" }",
 닉네임 변경,사용자,PATCH,/api/v1/users/me,,"Request Body:
 { ""nickname"": ""string"" }","Response (200 OK)
-{ ""user_id"": ""uuid"",
+{ ""user_id"": ""string (BIGINT)"",
   ""email"": ""string"",
   ""nickname"": ""string"",
-  ""updated_at"": ""ISO 8601"" }",
+  ""updated_at"": ""ISO 8601"" }
+
+※ user_id는 ERD v6.2에서 BIGINT(불변식 #1). JSON은 문자열로 직렬화.",
 채팅 시작 (WebSocket),채팅,WS,/api/v1/chat/ws,"• thread_id: 채팅 세션 ID (없으면 새로 생성)
 • token: JWT 인증 토큰","Client → Server:
 { ""type"": ""message"",
@@ -60,7 +69,7 @@ Google 소셜 로그인,사용자,POST,/api/v1/auth/google,,"Request Body:
 WS: 행사 검색 (EVENT_SEARCH),채팅,WS,/api/v1/chat/ws,,"Client → Server:
 { ""type"": ""message"",
   ""content"": ""이번 주말 서울 전시회"" }","응답 블록 순서:
-intent → text_stream → events[] → done
+intent → status → text_stream → events[] → done
 
 events 블록:
 { ""items"": [
@@ -112,12 +121,15 @@ events 블록:
 WS: 단일 장소 분석 (ANALYSIS),채팅,WS,/api/v1/chat/ws,,"Client → Server:
 { ""type"": ""message"",
   ""content"": ""이 카페 분석해줘"" }","응답 블록 순서:
-intent → text_stream → analysis_sources → done
+intent → status → text_stream → analysis_sources → done
 
-text_stream 내용:
-""맛 4.3 / 서비스 3.0 / 분위기 4.0 / 가성비 3.8 / 청결 3.0 / 접근성 4.7
+text_stream 내용 (ERD v6.2 6지표 제시):
+""만족도 4.3 / 접근성 4.7 / 청결 3.0 / 가성비 3.8 / 분위기 4.0 / 전문성 3.5
 키워드: 넓은 좌석, 친절한 직원
-요약: ...""",
+요약: ...""
+
+※ 6 지표 JSON 키: satisfaction / accessibility / cleanliness / value / atmosphere / expertise
+※ 'expertise'(전문성)는 카테고리별로 LLM이 해석: 카페=음료/맛 품질, 공원=경관/편의시설, 도서관=장서/프로그램 등",
 WS: 일정 추가 (CALENDAR),채팅,WS,/api/v1/chat/ws,,"Client → Server:
 { ""type"": ""message"",
   ""content"": ""토요일 2시 경복궁 일정 추가"" }","응답 블록 순서:
@@ -192,31 +204,35 @@ text_stream에 딕링크 포함:
 WS: 리뷰 비교 (REVIEW_COMPARE),채팅,WS,/api/v1/chat/ws,,"Client → Server:
 { ""type"": ""message"",
   ""content"": ""스타벅스 vs 블루보틀 비교"" }","응답 블록 순서:
-intent → text_stream → chart → analysis_sources → done
+intent → status → text_stream → chart → analysis_sources → done
 
 chart 블록:
 { ""chart_type"": ""radar"",
   ""places"": [
     { ""name"": ""string"",
-      ""scores"": { ""taste"": 4.3, ""service"": 3.0, ""atmosphere"": 4.0, ""value"": 3.8, ""cleanliness"": 3.0, ""accessibility"": 4.7 } }
+      ""scores"": { ""satisfaction"": 4.3, ""accessibility"": 4.7, ""cleanliness"": 3.0, ""value"": 3.8, ""atmosphere"": 4.0, ""expertise"": 3.5 } }
   ] }
+
+※ 6 지표는 ERD v6.2 고정 키: satisfaction/accessibility/cleanliness/value/atmosphere/expertise. 'expertise'는 카테고리별로 LLM이 해석(카페=음료품질, 공원=경관/편의시설, 도서관=장서/프로그램 등).
 
 analysis_sources 블록:
 { ""review_count"": 15, ""sources"": [""Google"", ""Naver""] }",
 WS: 장소 검색 (PLACE_SEARCH),채팅,WS,/api/v1/chat/ws,,"Client → Server:
 { ""type"": ""message"",
   ""content"": ""홍대 카페"" }","응답 블록 순서:
-intent → text_stream → place[] → map_markers → done
+intent → status → text_stream → places[] → map_markers → done
 
-place 블록:
-{ ""place_id"": ""uuid"",
-  ""name"": ""string"",
-  ""category"": ""string"",
-  ""address"": ""string"",
-  ""location"": { ""lat"": 0.0, ""lng"": 0.0 },
-  ""rating"": 4.5,
-  ""photo_url"": ""string"",
-  ""is_open_now"": true }",
+places 블록:
+{ ""items"": [
+  { ""place_id"": ""uuid"",
+    ""name"": ""string"",
+    ""category"": ""string"",
+    ""address"": ""string"",
+    ""location"": { ""lat"": 0.0, ""lng"": 0.0 },
+    ""rating"": 4.5,
+    ""photo_url"": ""string"",
+    ""is_open_now"": true }
+] }",
 WS: 장소 추천 (PLACE_RECOMMEND),채팅,WS,/api/v1/chat/ws,,"Client → Server:
 { ""type"": ""message"",
   ""content"": ""카공하기 좋은 카페 추천"" }","응답 블록 순서:

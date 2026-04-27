@@ -84,13 +84,17 @@ DB_HOST=127.0.0.1
 
 ### 직접 IP 접속
 
-`backend/.env`에 `OPENSEARCH_HOST=<GCE 공인 IP>`. nori plugin은 인스턴스에 이미 설치됨.
+`backend/.env`에 `OPENSEARCH_HOST=<GCE 공인 IP>`. **HTTPS + Basic Auth** 필수.
+
+> **nori 한국어 분석기**: ✅ 설치 완료 (2026-04-13). `analysis-nori 2.17.0`. 기존 인덱스에 nori 매핑 적용은 재적재 완료 후 별도 진행 예정.
 
 연결 테스트:
 ```bash
-curl http://$OPENSEARCH_HOST:9200/_cluster/health
+curl -sk -u admin:Localbiz2026! "https://$OPENSEARCH_HOST:9200/_cluster/health"
 # {"cluster_name":"...","status":"green",...} 확인
 ```
+
+> `.env` 필요 키: `OPENSEARCH_USER=admin`, `OPENSEARCH_PASS=Localbiz2026!`
 
 > 인덱스 생성·삭제 권한 강력. 실수 방지로 본인 작업 외 인덱스 건드리지 않음. 운영 인덱스: `places_vector`, `events_vector`, `place_reviews`.
 
@@ -201,8 +205,23 @@ claude
 
 ---
 
+## 현재 DB 상태 (2026-04-13)
+
+| 항목 | 수치 |
+|---|---|
+| places | 535,431 (18 카테고리, 48 source) |
+| events | 7,301 (8 source) |
+| administrative_districts | 427 |
+| population_stats | 278,880 |
+| OS places_vector | 재적재 진행 중 (~535K 목표) |
+| OS events_vector | 7,301 (완료) |
+| OS place_reviews | 진행 중 |
+
+> **v2 변경**: `place_analysis` 테이블 DROP — 런타임 Gemini lazy 채점으로 전환.
+
 ## 변경 이력
 
 | 일자 | 변경 | 작성 |
 |---|---|---|
+| 2026-04-13 | OS HTTPS+Basic Auth, nori 대기, DB 현황 갱신, place_analysis DROP 반영 | 이정 |
 | 2026-04-10 | 초안 — 1Password 단일 자격증명 + 직접 IP 접속 default | 이정 |

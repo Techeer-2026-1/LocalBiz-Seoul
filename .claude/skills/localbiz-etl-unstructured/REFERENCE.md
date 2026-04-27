@@ -89,4 +89,4 @@
 - `backend/_legacy_scripts/embed_utils.py` (참고)
 - `backend/_legacy_scripts/batch_review_analysis.py` (참고, --naver-only 모드 정답 패턴)
 - `~/.../memory/project_db_state_2026-04-10.md`
-- `기획/LocalBiz_Intelligence_ERD_상세설명보고서_v6.1.docx` §4.3 (place_analysis 컬럼 권위)
+- `기획/ERD_테이블_컬럼_사전_v6.3.md` (ERD 컬럼 권위, v6.1 docx는 기획/_legacy/)

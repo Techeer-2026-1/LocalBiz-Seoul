@@ -35,11 +35,15 @@ if "/force" in prompt:
 
 # non-trivial 코딩 키워드 (게이트 트리거)
 TRIGGERS = [
-    "구현", "추가해", "만들어", "새 기능", "기능 추가",
+    "구현", "추가해", "추가하자", "만들어", "만들자", "새 기능", "기능 추가",
     "리팩토링", "재작성", "구조 변경", "마이그레이션",
     "노드 추가", "intent 추가", "응답 블록", "ws 블록",
     "etl 추가", "스크립트 추가",
     "테이블 추가", "컬럼 추가", "스키마 변경",
+    "수정해", "수정하자", "변경해", "변경하자",
+    "갱신해", "갱신하자", "최신화", "정리해", "정리하자",
+    "바꿔", "고쳐", "생성해", "생성하자", "삭제해", "삭제하자",
+    "업데이트", "검토해",
     "/plan", "기획부터", "설계 먼저",
 ]
 prompt_lc = prompt.lower()
@@ -56,31 +60,9 @@ with open(flag_path, "w", encoding="utf-8") as f:
     f.write(f"trigger: {', '.join(matched)}\n")
     f.write(f"session_id: {data.get('session_id', 'default')}\n")
 
-# Socratic 인터뷰 인젝션
-print("=" * 60)
-print("[Phase 3 INTENT GATE] non-trivial 코딩 요청 감지")
-print("=" * 60)
-print(f"트리거 키워드: {', '.join(matched)}")
-print("")
-print("PLANNING MODE ON. 다음 절차 강제:")
-print("")
-print("1. 요구사항이 모호하면 코드 짜기 전에 사용자에게 질문 (Socratic):")
-print("   - 영향 받는 모듈/테이블/intent/응답 블록은?")
-print("   - Phase 라벨 (P1/P2/P3/ETL/Infra)?")
-print("   - 19 불변식 중 위반 위험은?")
-print("   - 검증 시나리오는?")
-print("   - 뺀 것이 있는가? (반대 가설)")
-print("")
-print("2. .sisyphus/plans/{YYYY-MM-DD}-{slug}/plan.md 생성")
-print("   (TEMPLATE 복사 → localbiz-plan 스킬 호출)")
-print("")
-print("3. Metis → Momus 서브에이전트로 검토 (Agent 도구).")
-print("   reviews/NNN-{role}-{verdict}.md 영구 기록.")
-print("")
-print("4. 통과 시 plan.md 최종 결정을 APPROVED로 변경 → flag 자동 해제.")
-print("")
-print("READ-ONLY 강제: planning_mode 동안 .sisyphus/ / .claude/ 외 Edit/Write 차단.")
-print("우회: 사용자에게 '/force' 입력을 요청.")
-print("=" * 60)
+# silent: stdout 출력 없음. planning_mode.flag 파일 생성만 하고 종료.
+# PreToolUse hook (pre_edit_planning_mode.sh)이 .sisyphus/.claude 외 Edit/Write를
+# 차단 — 차단 메시지에 "PLANNING MODE 활성화됨, plan부터 작성하라" 안내 포함되므로
+# Claude가 그때 plan 작성으로 전환하면 됨. UserPromptSubmit 단계의 인젝션은 불필요.
 sys.exit(0)
 PY
