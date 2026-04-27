@@ -1,7 +1,5 @@
 # =================================================================
-# AnyWay (LocalBiz Intelligence) — top-level .gitignore
-# backend/ 자체에도 .gitignore 가 있어 backend 전용 항목은 거기서 처리.
-# 본 파일은 monorepo 루트의 비밀·캐시·대용량·OS·하네스 상태를 처리.
+# LocalBiz Intelligence — .gitignore
 # =================================================================
 
 # ─── Secrets / 환경변수 ──────────────────────────────────────────
@@ -14,10 +12,6 @@ credentials.json
 token.json
 *.secret
 
-# postgres MCP는 ${DB_PASSWORD} env var로 password 주입하므로 .mcp.json은 추적 OK.
-# 만약 .mcp.json에 평문 비밀이 들어가면 즉시 추가:
-# .mcp.json
-
 # ─── Python ──────────────────────────────────────────────────────
 __pycache__/
 *.py[cod]
@@ -25,58 +19,59 @@ __pycache__/
 *.egg-info/
 dist/
 build/
-.eggs/
-
-# venv는 backend/venv 만 사용, 루트엔 일반적으로 없음. 그래도 안전 차원
 venv/
 .venv/
-env/
 
-# ─── Cache ──────────────────────────────────────────────────────
+# ─── Cache / 린트 ────────────────────────────────────────────────
 .pytest_cache/
 .ruff_cache/
 .mypy_cache/
 .pyright/
 .coverage
 htmlcov/
-.tox/
-
-# ─── 하네스 (Phase 2-bis / Phase 3) 런타임 상태 ───────────────────
-# .sisyphus/plans/, .sisyphus/notepads/ 는 추적
-# .sisyphus/state/는 휘발성 (hook 간 공유) → ignore
-.sisyphus/state/*
-!.sisyphus/state/.gitkeep
-
-# ─── 데이터셋 / 산출물 (대용량) ────────────────────────────────────
-csv_data/
-profile_report.md
-gdown_log.txt
-*.csv.bak
-data/
-out/
-artifacts/
-
-# ─── 백업 ───────────────────────────────────────────────────────
-*.bak
-*.backup
-CLAUDE.md.full.bak
-
-# ─── IDE / 에디터 ────────────────────────────────────────────────
-.vscode/
-.idea/
-*.swp
-*.swo
-*~
 
 # ─── OS ─────────────────────────────────────────────────────────
 .DS_Store
-.DS_Store?
+**/.DS_Store
 ._*
 Thumbs.db
-desktop.ini
 
-# ─── 임시/로그 ───────────────────────────────────────────────────
+# ─── IDE ─────────────────────────────────────────────────────────
+.vscode/
+.idea/
+*.swp
+*~
+
+# ─── 로그 / 임시 ────────────────────────────────────────────────
+logs/
 *.log
 *.tmp
 .tmp/
 tmp/
+
+# ─── 백업 ───────────────────────────────────────────────────────
+*.bak
+*.backup
+
+# ─── Claude Code 로컬 설정 ──────────────────────────────────────
+.claude/settings.local.json
+
+# ─── 하네스 (sisyphus) ──────────────────────────────────────────
+# plans/, notepads/, boulder.json, dependency-maps/ → 추적 (의사결정 기록)
+# state/ → 휘발성 런타임 상태 → 무시
+.sisyphus/state/
+
+# ─── 레거시 아카이브 (로컬 참조 전용) ────────────────────────────
+backend/_archive/
+
+# ─── data/ — 전체 무시 (서비스 데이터 자산 보호) ───────────────────
+# wiki/ 엔티티 = 핵심 비즈니스 데이터. 공개 repo 노출 금지.
+# 스키마 문서(SCHEMA.md, CLAUDE.md)만 별도 추적.
+data/
+
+# data/ 중 스키마 문서만 추적 (코드 규약이므로 공개 OK)
+!data/SCHEMA.md
+!data/CLAUDE.md
+
+# ─── graphify 산출물 ─────────────────────────────────────────────
+graphify-out/
