@@ -1,10 +1,95 @@
-# LocalBiz Intelligence
+# CLAUDE.md
+
+This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
+
+# LocalBiz Intelligence (AnyWay)
 
 서울 로컬 라이프 AI 챗봇. 자연어 → 장소/행사/코스/분석. 하이브리드 검색(PG+PostGIS / OpenSearch 768d k-NN) + LangGraph + Gemini.
 
 **팀:** 이정(BE/PM) · 정조셉(BE) · 한정수(BE) · 강민서(BE) · 이정원(FE)
-**Source of truth:** `기획/서비스 통합 기획서 33d7a82c52e281f0a57fd84ac07c56f8.md` / `기획/LocalBiz_Intelligence_ERD_상세설명보고서_v6.1.docx`
-**하네스 단계:** Phase 1 (Hard-constraints + Memory Genesis) 진행 중. `.claude/hooks/`가 ruff·pyright·append-only SQL 가드를 강제함.
+**Source of truth:** `기획/ERD_테이블_컬럼_사전_v6.3.md` / `기획/API 명세서 *.csv` / `기획/기능 명세서 *.csv` / `기획/ETL_적재_현황.md` (상세: `기획/_legacy/서비스 통합 기획서 v2.md`)
+**하네스 단계:** Phase 1-5 완료. Phase 6 (KAIROS) 대기. `.claude/hooks/`가 ruff·pyright·append-only SQL 가드·skill routing·planning mode를 강제함.
+
+## Common Commands
+
+```bash
+# 전체 검증 (PR 전 필수) — 프로젝트 루트에서 실행
+./validate.sh   # 1)ruff check → 2)ruff format --check → 3)pyright → 4)pytest → 5)기획 무결성 → 6)plan 무결성
+
+# Backend 서버
+cd backend && source venv/bin/activate
+python -m uvicorn src.main:app --host 0.0.0.0 --port 8000 --reload
+
+# 린터/포매터/타입체커 (backend/ 에서)
+ruff check . && ruff format .
+pyright src scripts
+
+# 테스트 (backend/ 에서)
+pytest                              # 전체
+pytest tests/test_foo.py::test_bar -v  # 단일
+
+# ETL 스크립트 (반드시 프로젝트 루트에서 PYTHONPATH=.)
+PYTHONPATH=. python backend/scripts/etl/crawl_reviews.py --naver-only --category 음식점 --limit 20
+PYTHONPATH=. python backend/scripts/etl/load_vectors.py --limit 100
+```
+
+## Architecture
+
+### LangGraph Flow (`backend/src/graph/real_builder.py`)
+
+```
+SSE → intent_router → query_preprocessor → (조건부 라우팅)
+  ├── PLACE_SEARCH     → place_search     → response_builder → END
+  ├── PLACE_RECOMMEND  → place_recommend  → response_builder → END
+  ├── EVENT_SEARCH     → event_search     → response_builder → END
+  ├── EVENT_RECOMMEND  → event_recommend  → response_builder → END
+  ├── COURSE_PLAN      → course_plan      → response_builder → END
+  ├── DETAIL_INQUIRY   → detail_inquiry   → response_builder → END
+  ├── BOOKING          → booking          → response_builder → END
+  ├── CALENDAR         → calendar         → response_builder → END
+  └── GENERAL          → general          → response_builder → END
+```
+
+**핵심 패턴**: `AgentState.response_blocks`는 `Annotated[list, operator.add]`로 정의되어 각 노드가 list를 반환하면 자동 append. `text_stream` 블록은 `{"type":"text_stream","system":"...","prompt":"..."}`을 `response_blocks`에 추가하면 `sse.py`에서 Gemini `astream()`으로 토큰 단위 스트리밍.
+
+### Backend Module Layout
+
+| 경로 | 역할 |
+|---|---|
+| `src/main.py` | FastAPI 앱 + lifespan (DB pool, OS 초기화/해제) |
+| `src/api/sse.py` | SSE 핸들러, `text_stream` Gemini 스트리밍 |
+| `src/config.py` | `get_settings()` 환경 변수 로딩 |
+| `src/graph/state.py` | `AgentState` TypedDict (LangGraph 전체 상태) |
+| `src/graph/real_builder.py` | `build_graph()` — StateGraph 구성 + 컴파일 |
+| `src/graph/*_node.py` | LangGraph 노드 구현 (intent_router 등) |
+| `src/models/blocks.py` | 16종 SSE 이벤트 타입 Pydantic 모델 + `CONTENT_BLOCK_TYPES` registry |
+| `src/db/postgres.py` | asyncpg pool (init/close) |
+| `src/db/opensearch.py` | OpenSearch 768d k-NN 벡터 검색 |
+| `src/tools/` | ReAct 에이전트 도구 (Phase 1 이후 생성 예정) |
+| `scripts/etl/` | ETL 스크립트 (`embed_utils.py`의 `embed_texts()` 공유) |
+
+### Hook Pipeline (`.claude/hooks/` — 수정 금지)
+
+| 시점 | Hook | 역할 |
+|---|---|---|
+| 사용자 프롬프트 | `skill_router`, `intent_gate` | 스킬 자동 발동 + planning mode 진입 |
+| Edit/Write 전 | `pre_edit_skill_check`, `pre_edit_planning_mode` | 스킬 미호출/plan 미승인 시 차단 |
+| Bash 전 | `pre_bash_guard` | destructive 명령 차단 (rm -rf, force push 등) |
+| Edit/Write 후 | `post_edit_python` | ruff + pyright 자동 실행 + append-only SQL 차단 |
+
+`/force` 키워드로 skill_router/intent_gate 스킵 가능. 단 pre_bash_guard, post_edit_python은 우회 불가.
+
+### Plan-Driven Workflow
+
+코드 작성 전에 `.sisyphus/plans/{YYYY-MM-DD}-{slug}/plan.md` 작성 → Metis/Momus 검토 → APPROVED → 구현. `localbiz-plan` 스킬이 자동 발동.
+
+### Extension Points
+
+- **새 노드**: `src/graph/*_node.py` → `real_builder.py`에 등록 → `intent_router_logic.py`에 매핑
+- **새 도구**: `src/tools/` → `search_agent.py` 또는 `action_agent.py`의 tools 리스트에 등록
+- **새 ETL**: `scripts/etl/` → `embed_utils.py`의 `embed_texts()` 사용, argparse + `--dry-run` 필수
+- **새 응답 블록/intent**: 기획서 §4.5 먼저 업데이트 → `src/models/blocks.py` Pydantic 모델 → 노드 구현
+- **DB 스키마 변경**: ERD 보고서 버전 bump → `scripts/migrations/` 마이그레이션 스크립트
 
 ## Tech Stack (변경 금지)
 
@@ -19,16 +104,16 @@
 
 ## 19 데이터 모델 불변식 (위반 시 차단)
 
-1. **PK 이원화**: places/events/place_analysis만 UUID. 나머지 BIGINT AI. administrative_districts는 자연키.
+1. **PK 이원화**: places/events만 UUID(VARCHAR(36)). 나머지 BIGINT AI. administrative_districts는 자연키. ※ place_analysis는 v2에서 DROP (런타임 lazy 전환).
 2. **PG↔OS 동기화**: place_id == places_vector._id (events / place_reviews 동일 패턴).
 3. **append-only 4테이블**: messages, population_stats, feedback, langgraph_checkpoints에 UPDATE/DELETE 금지. updated_at·is_deleted 칼럼 없음. (post_edit hook이 SQL 차단)
 4. **소프트 삭제**: 마스터/append-only/시계열/외부관리 테이블 제외. ERD §3 매트릭스가 source of truth.
-5. **의도적 비정규화 4건만 허용**: places.district / events.{district,place_name,address} / place_analysis.place_name / *.raw_data(JSONB).
+5. **의도적 비정규화 3건만 허용**: places.district / events.{district,place_name,address} / *.raw_data(JSONB). ※ place_analysis.place_name은 v2 DROP으로 삭제.
 6. **6개 지표 고정**: score_satisfaction/accessibility/cleanliness/value/atmosphere/expertise. 이름·개수 변경 금지.
 7. **임베딩 통일**: 768d Gemini만. OpenAI 사용 시 PR 차단.
 8. **DB 쿼리**: asyncpg 파라미터 바인딩(`$1`,`$2`) 필수. f-string SQL 금지. ORM 미사용.
 9. **타입 힌트**: `Optional[str]` 사용. `str | None` 금지(파이썬 3.9 호환).
-10. **WS 블록 16종 고정**: intent/text/text_stream/place/places/events/course/map_markers/map_route/chart/calendar/references/analysis_sources/disambiguation/done/error.
+10. **SSE 이벤트 타입 16종 고정**: intent/text/text_stream/place/places/events/course/map_markers/map_route/chart/calendar/references/analysis_sources/disambiguation/done/error. ※ 16종은 messages.blocks JSON에 저장 가능한 **콘텐츠 블록** 한정. `status`(노드 전환 진행 표시)와 `done_partial`(multi-intent 구분자)은 **SSE 제어 이벤트**로 messages 미저장(런타임 한정)이므로 본 목록에서 제외 — 기획서 §4.5 "SSE 제어" 카테고리 참조.
 11. **intent별 블록 순서 고정**: 기획서 §4.5. 변경하려면 .sisyphus/plans/ 작성 필요.
 12. **공통 쿼리 전처리**: Intent Router 직후 모든 검색 기능 공통 (Gemini JSON mode).
 13. **행사 검색 순서**: DB 우선 → 부족 시 Naver fallback. 역순 금지.
@@ -41,18 +126,17 @@
 
 ## 디렉토리 네비게이션
 
-- `backend/` → 별도 git repo. 모듈 레이아웃·명령어·DB 스키마 상세는 `backend/AGENTS.md`.
+- `backend/` → 모듈 레이아웃·명령어·DB 스키마 상세는 `backend/AGENTS.md`.
 - `기획/` → source of truth. 작업 규약은 `기획/AGENTS.md`. 코드와 충돌 시 기획이 우선.
-- `csv_data/` `profile_report.md` `profiler.py` → 데이터 프로파일링 산출물(읽기 전용).
 - `.claude/hooks/` → Hard-constraint 훅. 수정 금지.
-- `.claude/skills/` → Phase 2 스킬 7종 (plan/erd-guard/validate/langgraph-node/etl-structured/etl-unstructured/memory-dream). 트리거 키워드는 각 SKILL.md 참조.
+- `.claude/skills/` → 스킬 (plan/erd-guard/validate/langgraph-node/etl-structured/etl-unstructured/memory-dream). 트리거 키워드는 각 SKILL.md 참조.
+- `.sisyphus/plans/` → plan-driven workflow 영구 기록.
 - `.mcp.json` → postgres MCP (read-only). erd-guard / etl 스킬이 information_schema 실측에 사용.
-- `validate.sh` → ruff + pyright + pytest + 기획 무결성 단일 진입점.
 
 ## 코드리뷰 체크리스트 (PR 머지 전 확인)
 
 - [ ] 19 불변식 위반 없음 (특히 append-only / PK 타입 / 임베딩 / Optional 문법)
-- [ ] WS 블록 추가/제거 시 기획서 §4.5 같이 업데이트
+- [ ] SSE 이벤트 타입 추가/제거 시 기획서 §4.5 같이 업데이트
 - [ ] DB 쿼리: 파라미터 바인딩 / 인덱스 활용 / N+1 없음
 - [ ] async/await 일관성 (sync 래퍼 금지)
 - [ ] 새 노드/도구 등록 위치 정확 (real_builder.py / search_agent.py / action_agent.py)

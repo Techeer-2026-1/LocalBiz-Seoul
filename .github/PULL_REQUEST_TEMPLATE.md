@@ -25,7 +25,7 @@
 
 <!-- 본 PR이 backend/src 또는 ERD를 건드리면 모두 체크. 인프라/문서 PR은 "해당 없음" 표시 가능 -->
 
-- [ ] PK 이원화 준수 (places/events/place_analysis만 UUID, 나머지 BIGINT, administrative_districts는 자연키)
+- [ ] PK 이원화 준수 (places/events만 UUID, 나머지 BIGINT, administrative_districts는 자연키)
 - [ ] PG↔OS 동기화 (해당 시)
 - [ ] append-only 4테이블 미수정 (messages, population_stats, feedback, langgraph_checkpoints)
 - [ ] 소프트 삭제 매트릭스 준수 (ERD §3)
@@ -34,7 +34,7 @@
 - [ ] gemini-embedding-001 768d 사용 (OpenAI 임베딩 금지)
 - [ ] asyncpg 파라미터 바인딩 (`$1`, `$2`) — f-string SQL 금지
 - [ ] `Optional[str]` 사용 (`str | None` 금지)
-- [ ] WS 블록 16종 한도 준수
+- [ ] SSE 이벤트 타입 16종 한도 준수
 - [ ] intent별 블록 순서 (기획서 §4.5) 준수
 - [ ] 공통 쿼리 전처리 경유
 - [ ] 행사 검색 DB 우선 → Naver fallback

@@ -55,7 +55,7 @@ state["response_blocks"].append({
     "system": "당신은 ...",
     "prompt": f"질문: {query}",
 })
-# websocket.py가 Gemini astream()으로 토큰 단위 전송
+# sse.py가 Gemini astream()으로 토큰 단위 전송
 ```
 
 ## 참고 파일

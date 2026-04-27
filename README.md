@@ -44,9 +44,9 @@ claude                    # → "places 테이블 컬럼 조회해줘" 입력
 
 ## 한 단락 설명
 
-사용자가 자연어로 *"홍대에서 비 오는 날 갈 만한 분위기 카페"* 를 물으면, AnyWay는 12+1 intent로 분류 → 공통 쿼리 전처리 → PostGIS·k-NN 하이브리드 검색 → LangGraph 노드가 6 지표(만족도/접근성/청결도/가성비/분위기/전문성)로 추론 → 16종 응답 블록 (place/places/events/course/map_markers/chart/calendar/...)을 WebSocket으로 스트리밍한다. 코스 추천은 카테고리별 병렬 검색 → ST_DWithin → Greedy NN → OSRM 폴리라인까지. 데이터는 places 53만, events 7,301, place_analysis는 LLM 6 지표 채점 + Gemini 768d 임베딩으로 OpenSearch에 동기 인덱싱.
+사용자가 자연어로 *"홍대에서 비 오는 날 갈 만한 분위기 카페"* 를 물으면, AnyWay는 12+1 intent로 분류 → 공통 쿼리 전처리 → PostGIS·k-NN 하이브리드 검색 → LangGraph 노드가 6 지표(만족도/접근성/청결도/가성비/분위기/전문성)로 추론 → 16종 SSE 이벤트 타입 (place/places/events/course/map_markers/chart/calendar/...)을 SSE 스트림으로 스트리밍한다. FE는 `EventSource` 또는 `@microsoft/fetch-event-source`로 수신. 코스 추천은 카테고리별 병렬 검색 → ST_DWithin → Greedy NN → OSRM 폴리라인까지. 데이터는 places 53만 (18 카테고리), events 7,301. 리뷰 분석은 런타임 Gemini 6 지표 lazy 채점 + 768d 임베딩으로 OpenSearch place_reviews에 배치 적재.
 
-자세한 기획·아키텍처는 [`기획/서비스 통합 기획서 ...md`](기획/) 참조 (source of truth).
+자세한 기획·아키텍처는 [`기획/서비스 통합 기획서 v2.md`](기획/서비스%20통합%20기획서%20v2.md) 참조 (source of truth).
 
 ---
 
@@ -166,7 +166,7 @@ claude
 
 ### 2. 19 데이터 모델 불변식
 
-[`CLAUDE.md`](CLAUDE.md) 의 19개 룰 (PK 이원화, append-only 4테이블, 임베딩 768d, Optional[str], WS 블록 16종, ...) 위반은 hook이 차단. PR 머지 전 체크리스트 필수.
+[`CLAUDE.md`](CLAUDE.md) 의 19개 룰 (PK 이원화, append-only 4테이블, 임베딩 768d, Optional[str], SSE 이벤트 타입 16종, ...) 위반은 hook이 차단. PR 머지 전 체크리스트 필수.
 
 ### 3. plan-driven · 하네스 hook 구조
 

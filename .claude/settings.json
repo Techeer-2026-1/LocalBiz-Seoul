@@ -1,17 +1,18 @@
 {
   "$schema": "https://json.schemastore.org/claude-code-settings.json",
-  "_comment": "Phase 1 Hard-constraints + Phase 2-bis Skill Router + Phase 3 Planning Mode. settings.local.json은 개인 권한 allow-list, 이 파일은 팀 공용 훅. 절대경로 금지 — $CLAUDE_PROJECT_DIR 사용.",
+  "_comment": "Phase 1 Hard-constraints + Phase 2-bis Skill Router + Phase 3 Planning Mode. 2026-04-13 전훅 재활성화.",
   "hooks": {
     "UserPromptSubmit": [
       {
+        "matcher": "",
         "hooks": [
           {
             "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/skill_router.sh"
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/skill_router.sh\""
           },
           {
             "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/intent_gate.sh"
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/intent_gate.sh\""
           }
         ]
       }
@@ -22,7 +23,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/pre_bash_guard.sh"
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/pre_bash_guard.sh\""
           }
         ]
       },
@@ -31,11 +32,11 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/pre_edit_skill_check.sh"
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/pre_edit_skill_check.sh\""
           },
           {
             "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/pre_edit_planning_mode.sh"
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/pre_edit_planning_mode.sh\""
           }
         ]
       }
@@ -46,7 +47,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/post_edit_python.sh"
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/post_edit_python.sh\""
           }
         ]
       },
@@ -55,7 +56,7 @@
         "hooks": [
           {
             "type": "command",
-            "command": "$CLAUDE_PROJECT_DIR/.claude/hooks/skill_invocation_log.sh"
+            "command": "\"$CLAUDE_PROJECT_DIR/.claude/hooks/skill_invocation_log.sh\""
           }
         ]
       }

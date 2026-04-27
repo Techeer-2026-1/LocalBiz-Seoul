@@ -12,7 +12,7 @@ LangGraph 그래프 확장 절차적 가드.
 ## 발동 조건
 
 - "새 노드", "노드 추가", "PLACE_RECOMMEND 같은 intent", "intent 추가"
-- "응답 블록 추가", "WS 블록", "chart/calendar/place 블록"
+- "응답 블록 추가", "SSE 이벤트", "WS 블록", "chart/calendar/place 블록"
 - "real_builder", "intent_router", "AgentState"
 - 12+1 intent (PLACE_SEARCH, PLACE_RECOMMEND, EVENT_SEARCH, COURSE_PLAN, ANALYSIS, DETAIL_INQUIRY, COST_ESTIMATE, CROWDEDNESS, BOOKING, REVIEW_COMPARE, IMAGE_SEARCH, FAVORITE, GENERAL) 변경
 

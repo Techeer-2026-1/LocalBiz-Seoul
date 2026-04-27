@@ -5,17 +5,17 @@
 
 ## 파일 권위 순서
 
-1. **마스터:** `서비스 통합 기획서 33d7a82c52e281f0a57fd84ac07c56f8.md`
-2. **DB 권위서:** `LocalBiz_Intelligence_ERD_상세설명보고서_v6.1.docx`
-3. **API 권위서:** `API 명세서 424797f5eaec40c2bc66463118857814_all.csv` (REST 19 + WS 블록 스키마)
-4. **기능/진행:** `기능 명세서 4669814b7a624c29b5422a85efcda2b1_all.csv`
-5. **시각:** `Screenshot 2026-04-03 at 4.51.48 PM.png` (GCP 아키텍처 — 최신), ERD Cloud 다이어그램
+1. **마스터:** `_legacy/서비스 통합 기획서 v2.md` (상세) / [노션 기획서](https://www.notion.so/33d7a82c52e281f0a57fd84ac07c56f8)
+2. **DB 권위서:** `ERD_테이블_컬럼_사전_v6.3.md`
+3. **API 권위서:** `API_명세서.md` → [노션 API DB](https://www.notion.so/424797f5eaec40c2bc66463118857814)
+4. **기능/진행:** `기능_명세서.md` → [노션 기능 DB](https://www.notion.so/4669814b7a624c29b5422a85efcda2b1)
+5. **ETL 현황:** `ETL_적재_현황.md`
 
 ## 절대 안 됨 (LLM 자가 판단 변경 금지)
 
 - ERD 보고서의 **12 PG 테이블** / **3 OS 인덱스** 구조 변경
 - **6개 지표** 이름·개수·의미 (`score_satisfaction` `_accessibility` `_cleanliness` `_value` `_atmosphere` `_expertise`)
-- **WS 블록 16종** 추가/제거 또는 intent별 블록 순서
+- **SSE 이벤트 타입 16종** 추가/제거 또는 intent별 블록 순서
 - **PK 타입 결정** (UUID vs BIGINT 매트릭스)
 - **append-only 4테이블 분류** (messages / population_stats / feedback / langgraph_checkpoints)
 - **임베딩 모델·차원** (`gemini-embedding-001` 768d nori HNSW cosinesimil)

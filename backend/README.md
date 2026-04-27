@@ -56,11 +56,9 @@ python -m uvicorn src.entry:app --host 0.0.0.0 --port 8000 --reload
 ### 6. 비정형 데이터 ETL
 
 ```bash
-# 리뷰 분석 (Naver Blog → LLM 6개 지표 채점 → place_analysis)
-PYTHONPATH=.. python scripts/batch_review_analysis.py --batch --naver-only --category 음식점 --limit 20
-
-# 리뷰 → OpenSearch 임베딩
-PYTHONPATH=.. python scripts/load_place_reviews.py
+# 리뷰 크롤링 + 임베딩 (Naver Blog → Gemini 6 지표 채점 → OS place_reviews)
+# v2: place_analysis DROP → 런타임 lazy 전환. crawl_reviews.py가 통합 처리.
+python -m scripts.etl.crawl_reviews --naver-only --limit 50
 
 # 가격 수집 (Naver Blog → 정규식 추출 → raw_data)
 PYTHONPATH=.. python scripts/collect_price_data.py --category 음식점 --limit 30
