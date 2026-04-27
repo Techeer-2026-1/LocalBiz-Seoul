@@ -12,7 +12,7 @@
 
 ```bash
 # 1. clone
-gh repo clone Techeer-2026-1/AnyWay && cd AnyWay
+gh repo clone Techeer-2026-1/LocalBiz-Seoul && cd LocalBiz-Seoul
 
 # 2. 1Password vault 열기 → "AnyWay-Dev-Shared" 항목 (PM 이정에게 vault 초대 요청)
 
@@ -46,7 +46,7 @@ claude                    # → "places 테이블 컬럼 조회해줘" 입력
 
 사용자가 자연어로 *"홍대에서 비 오는 날 갈 만한 분위기 카페"* 를 물으면, AnyWay는 12+1 intent로 분류 → 공통 쿼리 전처리 → PostGIS·k-NN 하이브리드 검색 → LangGraph 노드가 6 지표(만족도/접근성/청결도/가성비/분위기/전문성)로 추론 → 16종 SSE 이벤트 타입 (place/places/events/course/map_markers/chart/calendar/...)을 SSE 스트림으로 스트리밍한다. FE는 `EventSource` 또는 `@microsoft/fetch-event-source`로 수신. 코스 추천은 카테고리별 병렬 검색 → ST_DWithin → Greedy NN → OSRM 폴리라인까지. 데이터는 places 53만 (18 카테고리), events 7,301. 리뷰 분석은 런타임 Gemini 6 지표 lazy 채점 + 768d 임베딩으로 OpenSearch place_reviews에 배치 적재.
 
-자세한 기획·아키텍처는 [`기획/서비스 통합 기획서 v2.md`](기획/서비스%20통합%20기획서%20v2.md) 참조 (source of truth).
+자세한 기획·아키텍처는 [노션 서비스 통합 기획서](https://www.notion.so/33d7a82c52e281f0a57fd84ac07c56f8) 참조 (source of truth).
 
 ---
 
@@ -57,8 +57,7 @@ AnyWay/
 ├── backend/                  # FastAPI + LangGraph (Python 3.11)
 │   ├── src/                  # 비즈니스 코드 (api, graph, models, ...)
 │   ├── scripts/              # ETL, 마이그레이션, run_migration.py
-│   ├── _legacy_src/          # PoC 단계 코드 (참조 전용, 검사 제외)
-│   ├── _legacy_scripts/      # PoC ETL (참조 전용)
+│   ├── _archive/             # PoC 코드 (로컬 참조 전용, gitignored)
 │   ├── tests/
 │   ├── pyproject.toml        # ruff config
 │   ├── pyrightconfig.json    # 타입 체커 (basic)
@@ -72,7 +71,7 @@ AnyWay/
 │   └── dev-environment.md    # Cloud SQL Auth Proxy / GCE OS / 1Password 셋업
 ├── .claude/                  # Claude Code 하네스
 │   ├── hooks/                # Phase 1-3 hooks (강제 가드)
-│   ├── skills/               # 8 스킬 (localbiz-* + safe-destructive-ops)
+│   ├── skills/               # localbiz-* 스킬 + safe-destructive-ops
 │   ├── agents/               # metis, momus 서브에이전트
 │   └── settings.json
 ├── .sisyphus/                # Phase 3 Prometheus Planning
@@ -84,8 +83,9 @@ AnyWay/
 │   ├── ISSUE_TEMPLATE/
 │   └── PULL_REQUEST_TEMPLATE.md
 ├── CLAUDE.md                 # 19 데이터 모델 불변식 + 절대 금지 사항
-├── CONTEXT.md                # KAIROS Wisdom (ETL 함정 메모)
 ├── validate.sh               # 6단계 검증 단일 진입점
+├── frontend/                 # Next.js + Three.js (FE 합류 후 초기화)
+│   └── README.md
 ├── .env.example
 ├── .gitignore
 └── README.md (이 파일)
@@ -98,7 +98,7 @@ AnyWay/
 ### 1. Clone
 
 ```bash
-gh repo clone Techeer-2026-1/AnyWay
+gh repo clone Techeer-2026-1/LocalBiz-Seoul
 cd AnyWay
 ```
 
