@@ -399,7 +399,7 @@ def build():
             "'콘센트+조용+넓은 카페 성수', '혼밥+LP+아날로그 감성 카페 종로'",
             "사람이 검증한 또는 YouTube 크리에이터가 상세 소개한 장소. "
             "features controlled vocabulary (outlet, quiet 등)로 정밀 매칭. "
-            "data/wiki/ 엔티티 + data/extracted/youtube/ JSON으로 관리.",
+            "YouTube 크리에이터 리뷰 기반 큐레이션 데이터.",
         ),
     ]
 

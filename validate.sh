@@ -86,11 +86,15 @@ if os.path.exists(sql_path):
 # 3. 기획 마스터 문서 존재 확인
 master_files = [
     "기획/ERD_테이블_컬럼_사전_v6.3.md",
-    "기획/기능_명세서.md",
-    "기획/API_명세서.md",
     "기획/ETL_적재_현황.md",
     "기획/AGENTS.md",
 ]
+# 기능/API 명세서는 노션 DB가 source of truth (CSV export는 보조)
+import glob as _glob
+if not _glob.glob("기획/기능 명세서 *.csv"):
+    errors.append("기획 권위 문서 누락: 기획/기능 명세서 *.csv")
+if not _glob.glob("기획/API 명세서 *.csv"):
+    errors.append("기획 권위 문서 누락: 기획/API 명세서 *.csv")
 for m in master_files:
     if not os.path.exists(m):
         errors.append(f"기획 권위 문서 누락: {m}")
