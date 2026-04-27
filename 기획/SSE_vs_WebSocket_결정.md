@@ -27,7 +27,7 @@ LocalBiz의 핵심 기능은 "질의 → 풍부한 인사이트 스트리밍 응
 
 명세서상 양방향 제어가 필요해 보이는 기능들을 재검토한 결과:
 
-**Disambiguation**: 한두 intent에서만 사용 예정. 다음 방식으로 처리 가능:
+**Disambiguation**: 한두 intent에서만 사용 예정. 다음 방식으로 처리 가능
 - 옵션 A: "새 쿼리 자동 전송" 방식 (사용자가 선택지 클릭 시 새 SSE 스트림으로 재질의). UX상 자연스럽고 구현 가장 단순.
 - 옵션 B: `pending_disambiguations` dict + `asyncio.Future` 로 같은 세션 내 이어가기. 단일 서버 구조에서 간단히 구현 가능.
 
