@@ -136,6 +136,11 @@ found_any = False
 for plan_path in sorted(glob.glob(f"{plans_dir}/*/plan.md")):
     if "TEMPLATE" in plan_path:
         continue
+    # COMPLETE plan은 과거 기록이므로 형식 체크 스킵
+    with open(plan_path, encoding="utf-8") as _pf:
+        _ptxt = _pf.read()
+    if "COMPLETE" in _ptxt[:500]:
+        continue
     found_any = True
     plan_dir = os.path.dirname(plan_path)
     rel = os.path.relpath(plan_path, ROOT)

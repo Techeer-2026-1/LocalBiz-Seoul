@@ -10,12 +10,17 @@ Usage:
     vectors = await embed_batch_async(texts, api_key, session)  # async 20x faster
 """
 
+from __future__ import annotations
+
 import asyncio
 import json
 import logging
 import time
 import urllib.request
-from typing import Optional
+from typing import TYPE_CHECKING, Optional
+
+if TYPE_CHECKING:
+    import aiohttp
 
 logger = logging.getLogger(__name__)
 
@@ -139,7 +144,7 @@ _SEMAPHORE: Optional[asyncio.Semaphore] = None
 async def _call_batch_api_async(
     texts: list,
     api_key: str,
-    session: "aiohttp.ClientSession",
+    session: aiohttp.ClientSession,
 ) -> list:
     """aiohttp 기반 비동기 batchEmbedContents 1회 호출."""
     requests_body = []
@@ -165,7 +170,7 @@ async def _embed_one_chunk_async(
     chunk_idx: int,
     texts: list,
     api_key: str,
-    session: "aiohttp.ClientSession",
+    session: aiohttp.ClientSession,
     sem: asyncio.Semaphore,
 ) -> tuple:
     """단일 chunk(100건) 임베딩 — semaphore + inter-call delay."""
@@ -198,7 +203,7 @@ async def _embed_one_chunk_async(
 async def embed_batch_async(
     texts: list,
     api_key: str,
-    session: "aiohttp.ClientSession",
+    session: aiohttp.ClientSession,
     batch_size: int = BATCH_MAX,
     max_concurrent: int = 3,
 ) -> list:
