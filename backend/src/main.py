@@ -1,7 +1,7 @@
 """AnyWay backend — FastAPI 진입점.
 
 lifespan으로 DB pool / OS 클라이언트 초기화·해제.
-라우터: healthcheck + SSE.
+라우터: healthcheck + SSE + auth (Issue #4부터).
 """
 
 from __future__ import annotations
@@ -69,9 +69,11 @@ app = FastAPI(
 
 
 # --- Routers ---
+from src.api.auth import router as auth_router  # noqa: E402  # pyright: ignore[reportMissingImports]
 from src.api.sse import router as sse_router  # noqa: E402  # pyright: ignore[reportMissingImports]
 
 app.include_router(sse_router)
+app.include_router(auth_router)
 
 
 @app.get("/health")

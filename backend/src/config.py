@@ -3,7 +3,9 @@
 싱글턴 패턴으로 한 번만 로딩. 환경변수 또는 .env 파일에서 읽음.
 DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD,
 OPENSEARCH_HOST, OPENSEARCH_PORT, OPENSEARCH_USER, OPENSEARCH_PASS,
-GEMINI_LLM_API_KEY.
+GEMINI_LLM_API_KEY,
+JWT_SECRET, JWT_ALGORITHM, JWT_EXPIRE_MINUTES,
+GOOGLE_CLIENT_ID.
 """
 
 from __future__ import annotations
@@ -35,7 +37,16 @@ class Settings(BaseSettings):
 
     # --- App ---
     debug: bool = False
+
+    # --- Auth (JWT) ---
     jwt_secret: Optional[str] = None
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = 10080  # 7 days
+
+    # --- Auth (Google OAuth) ---
+    # FE에서 Google Identity Services로 받은 id_token을 검증할 때 사용.
+    # None이면 /auth/google 엔드포인트가 503 응답.
+    google_client_id: Optional[str] = None
 
     model_config = {
         "env_file": ".env",
