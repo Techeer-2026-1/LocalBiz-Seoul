@@ -165,36 +165,55 @@ async def list_chats(
     """
     pool = get_pool()  # asyncpg 커넥션 풀 가져오기
 
-    # --- cursor 유무에 따라 다른 SQL ---
+    # --- [버그 수정 #1] cursor 문자열 → datetime 변환 ---
+    # asyncpg는 TIMESTAMPTZ 파라미터에 Python datetime 객체를 요구한다.
+    # URL 쿼리 파라미터는 항상 문자열이므로, 여기서 datetime으로 변환해야 함.
+    # 변환 실패 시 (잘못된 형식) → 400 Bad Request
+    from datetime import datetime  # 함수 내 import (모듈 상단에서 사용 안 하는 경우 ruff가 제거하므로)
+
+    cursor_dt: Optional[datetime] = None
+    cursor_conv_id: Optional[int] = None
     if cursor:
-        # 2페이지 이후: "이전 페이지 마지막 항목의 updated_at보다 오래된" 대화만 가져옴
-        # pool.fetch(): fetchrow와 달리 여러 행을 list로 반환
+        try:
+            # 복합 커서 형식: "2026-04-27T12:00:00+09:00|123" (updated_at|conversation_id)
+            parts = cursor.split("|")
+            cursor_dt = datetime.fromisoformat(parts[0])
+            cursor_conv_id = int(parts[1]) if len(parts) > 1 else 0
+        except (ValueError, IndexError):
+            raise HTTPException(status_code=400, detail="잘못된 cursor 형식입니다")
+
+    # --- [버그 수정 #2] 복합 커서 (updated_at, conversation_id) ---
+    # updated_at만으로 정렬하면, 같은 시각에 수정된 대화가 누락될 수 있다.
+    # (updated_at, conversation_id)로 복합 정렬하면 동일 시각에도 순서가 보장된다.
+    if cursor_dt is not None:
+        # 2페이지 이후: 복합 커서로 정확한 위치 지정
         rows = await pool.fetch(
             """
-            SELECT thread_id, title, updated_at
+            SELECT thread_id, title, updated_at, conversation_id
             FROM conversations
-            WHERE user_id = $1           -- 현재 사용자 소유
-              AND is_deleted = false      -- 삭제 안 된 것만
-              AND updated_at < $2         -- cursor보다 오래된 것 (다음 페이지)
-            ORDER BY updated_at DESC      -- 최신순 정렬
-            LIMIT $3                      -- 가져올 개수
+            WHERE user_id = $1
+              AND is_deleted = false
+              AND (updated_at, conversation_id) < ($2, $3)
+            ORDER BY updated_at DESC, conversation_id DESC
+            LIMIT $4
             """,
             user_id,  # $1: 현재 사용자
-            cursor,  # $2: 이전 페이지 마지막 항목의 updated_at
-            limit + 1,  # $3: 요청한 것보다 1개 더 가져옴 (아래에서 다음 페이지 존재 판단용)
+            cursor_dt,  # $2: datetime 객체 (문자열이 아님!)
+            cursor_conv_id,  # $3: conversation_id (동일 시각 구분용)
+            limit + 1,  # $4: 다음 페이지 존재 여부 판단용
         )
     else:
         # 첫 페이지: cursor 없이 가장 최근 대화부터
         rows = await pool.fetch(
             """
-            SELECT thread_id, title, updated_at
+            SELECT thread_id, title, updated_at, conversation_id
             FROM conversations
             WHERE user_id = $1 AND is_deleted = false
-            ORDER BY updated_at DESC
+            ORDER BY updated_at DESC, conversation_id DESC
             LIMIT $2
             """,
             user_id,
-            limit + 1,  # 여기서도 1개 더 가져옴
+            limit + 1,
         )
 
     # --- 다음 페이지 존재 여부 판단 ---
@@ -216,11 +235,11 @@ async def list_chats(
             )
             for r in items  # items 리스트의 각 행에 대해 반복
         ],
-        # 다음 페이지가 있으면: 마지막 항목의 updated_at을 ISO 문자열로 변환해서 커서 반환
-        # 없으면: None → JSON에서 null → FE가 "더 이상 로딩할 것 없음" 판단
-        next_cursor=items[-1]["updated_at"].isoformat() if has_more and items else None,
-        # items[-1]: 리스트의 마지막 항목
-        # .isoformat(): datetime → "2026-04-27T12:00:00+09:00" 문자열 변환
+        # 복합 커서: "updated_at|conversation_id" 형식
+        # datetime.isoformat()으로 문자열 변환 + conversation_id 숫자 붙임
+        next_cursor=(
+            f"{items[-1]['updated_at'].isoformat()}|{items[-1]['conversation_id']}" if has_more and items else None
+        ),
     )
 
 
@@ -286,7 +305,15 @@ async def list_messages(
 
     pool = get_pool()
 
+    # cursor 검증: message_id는 정수여야 한다. 잘못된 값이면 400.
+    cursor_id: Optional[int] = None
     if cursor:
+        try:
+            cursor_id = int(cursor)
+        except ValueError:
+            raise HTTPException(status_code=400, detail="잘못된 cursor 형식입니다 (정수 필요)")
+
+    if cursor_id is not None:
         # 다음 페이지: "이 message_id보다 큰(=나중에 생성된) 메시지"부터
         rows = await pool.fetch(
             """
@@ -297,7 +324,7 @@ async def list_messages(
             LIMIT $3
             """,
             thread_id,  # $1: 어떤 대화의 메시지인지
-            int(cursor),  # $2: 이전 페이지 마지막 message_id (문자열→정수 변환)
+            cursor_id,  # $2: 검증된 정수 message_id
             limit + 1,  # $3: 다음 페이지 존재 여부 판단용
         )
     else:

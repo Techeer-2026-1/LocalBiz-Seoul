@@ -109,7 +109,9 @@ class ChatUpdateRequest(BaseModel):
     Pydantic이 자동으로 파싱하고, title이 없거나 타입이 다르면 422 반환.
     """
 
-    title: str
+    title: str = Field(..., min_length=1, max_length=200)
+    # min_length=1: 빈 문자열 거부
+    # max_length=200: DB VARCHAR(200) 초과 방지 → 초과 시 422 (500 대신)
 
 
 class ChatUpdateResponse(BaseModel):
