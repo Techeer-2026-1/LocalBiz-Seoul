@@ -41,6 +41,7 @@ class Settings(BaseSettings):
         "env_file": ".env",
         "env_file_encoding": "utf-8",
         "case_sensitive": False,
+        "extra": "ignore",  # .env에 Settings에 없는 변수가 있어도 무시 (에러 안 냄)
     }
 
 
