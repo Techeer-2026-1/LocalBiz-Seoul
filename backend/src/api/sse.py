@@ -5,12 +5,15 @@ intent별 블록 순서 고정. SSE(Server-Sent Events) 기반.
 
 결정 근거: 기획/SSE_vs_WebSocket_결정.md
 
-Phase 1 본작업에서 구현할 항목:
-  1. JWT 인증 (@microsoft/fetch-event-source로 Bearer 헤더)
-  2. LangGraph astream() 실행
-  3. 블록 순서에 맞춘 SSE 이벤트 전송
-  4. 에러/disconnect 처리 (request.is_disconnected())
-  5. messages 테이블 append (불변식 #3: append-only)
+흐름:
+  1. seed user 보장 (개발용)
+  2. conversations auto-create
+  3. user 메시지 INSERT
+  4. LangGraph astream() 실행
+  5. 각 노드 출력 블록을 SSE 이벤트로 전송
+  6. text_stream 블록 → Gemini astream()으로 토큰 스트리밍
+  7. assistant 메시지 INSERT (블록 목록)
+  8. done 이벤트 전송
 """
 
 from __future__ import annotations
@@ -23,6 +26,7 @@ from typing import Any, Optional
 from fastapi import APIRouter, Request
 from fastapi.responses import StreamingResponse
 
+from src.config import get_settings  # pyright: ignore[reportMissingImports]
 from src.models.blocks import (  # pyright: ignore[reportMissingImports]
     DoneBlock,
     StatusFrame,
@@ -76,6 +80,95 @@ def format_done_event(
 
 
 # ---------------------------------------------------------------------------
+# DB 헬퍼 — seed user, conversations, messages
+# ---------------------------------------------------------------------------
+async def _ensure_seed_user(pool: Any) -> int:
+    """개발용 seed user 보장. user_id=1 없으면 INSERT.
+
+    Returns:
+        user_id (int).
+    """
+    row = await pool.fetchrow("SELECT user_id FROM users WHERE user_id = $1", 1)
+    if row:
+        return int(row["user_id"])
+
+    await pool.execute(
+        "INSERT INTO users (user_id, email, auth_provider, password_hash) "
+        "VALUES ($1, $2, $3, $4) ON CONFLICT (user_id) DO NOTHING",
+        1,
+        "dev@localhost",
+        "email",
+        "dev_placeholder_hash",
+    )
+    logger.info("Seed user created: user_id=1, email=dev@localhost")
+    return 1
+
+
+async def _ensure_conversation(pool: Any, thread_id: str, user_id: int) -> None:
+    """conversations 테이블에 thread_id가 없으면 auto-create."""
+    row = await pool.fetchrow("SELECT thread_id FROM conversations WHERE thread_id = $1", thread_id)
+    if row:
+        return
+
+    await pool.execute(
+        "INSERT INTO conversations (thread_id, user_id, title) VALUES ($1, $2, $3)",
+        thread_id,
+        user_id,
+        "새 대화",
+    )
+    logger.info("Conversation auto-created: thread_id=%s", thread_id)
+
+
+async def _insert_message(
+    pool: Any,
+    thread_id: str,
+    role: str,
+    blocks: list[dict[str, Any]],
+) -> None:
+    """messages 테이블에 INSERT (append-only, 불변식 #3).
+
+    message_id는 BIGSERIAL auto-increment (불변식 #1).
+    """
+    blocks_json = json.dumps(blocks, ensure_ascii=False)
+    await pool.execute(
+        "INSERT INTO messages (thread_id, role, blocks) VALUES ($1, $2, $3::jsonb)",
+        thread_id,
+        role,
+        blocks_json,
+    )
+
+
+# ---------------------------------------------------------------------------
+# Gemini 토큰 스트리밍
+# ---------------------------------------------------------------------------
+async def _stream_gemini(system_prompt: str, user_prompt: str) -> AsyncIterator[str]:
+    """Gemini 2.5 Flash로 토큰 단위 스트리밍.
+
+    Yields:
+        각 토큰 문자열 (delta).
+    """
+    from langchain_google_genai import ChatGoogleGenerativeAI  # pyright: ignore[reportMissingImports]
+
+    settings = get_settings()
+    llm = ChatGoogleGenerativeAI(
+        model="gemini-2.5-flash",
+        google_api_key=settings.gemini_llm_api_key,
+        temperature=0.7,
+        streaming=True,
+    )
+
+    messages: list[tuple[str, str]] = [
+        ("system", system_prompt),
+        ("human", user_prompt),
+    ]
+
+    async for chunk in llm.astream(messages):
+        content = chunk.content
+        if content:
+            yield str(content)
+
+
+# ---------------------------------------------------------------------------
 # SSE 엔드포인트
 # ---------------------------------------------------------------------------
 @router.get("/api/v1/chat/stream")
@@ -87,14 +180,6 @@ async def chat_stream(
 ) -> StreamingResponse:
     """메인 채팅 SSE 엔드포인트.
 
-    Phase 1 본작업에서 다음 흐름으로 교체:
-      1. JWT 검증 (Authorization 헤더 또는 token query param)
-      2. LangGraph astream({"query": ..., "thread_id": ...})
-      3. 각 노드 출력 블록을 intent별 순서에 맞춰 SSE 이벤트 전송
-      4. 완료 시 done 이벤트 전송
-      5. messages 테이블에 블록 목록 append (불변식 #3)
-      6. 클라이언트 disconnect 시 request.is_disconnected()로 감지하여 중단
-
     Args:
         request: FastAPI Request (disconnect 감지용).
         thread_id: 대화 스레드 ID.
@@ -103,17 +188,77 @@ async def chat_stream(
     """
 
     async def event_generator() -> AsyncIterator[str]:
+        from src.db.postgres import get_pool  # pyright: ignore[reportMissingImports]
+        from src.graph.real_builder import build_graph  # pyright: ignore[reportMissingImports]
+
         logger.info(
-            "SSE stream started: thread_id=%s, query=%s, token=%s",
+            "SSE stream started: thread_id=%s, query=%s",
             thread_id,
             query[:100],
-            "present" if token else "none",
         )
 
         try:
-            # TODO: LangGraph astream() 실행 + 블록 순서 전송
-            # 지금은 stub — done만 전송
-            yield format_done_event(status="done")
+            # 1. DB 준비 — seed user + conversation
+            pool = get_pool()
+            user_id = await _ensure_seed_user(pool)
+            await _ensure_conversation(pool, thread_id, user_id)
+
+            # 2. user 메시지 INSERT
+            user_blocks: list[dict[str, Any]] = [{"type": "text", "content": query}]
+            await _insert_message(pool, thread_id, "user", user_blocks)
+
+            # 3. LangGraph astream() 실행
+            graph = build_graph(checkpointer=None)
+            input_state: dict[str, Any] = {
+                "query": query,
+                "thread_id": thread_id,
+                "user_id": user_id,
+                "conversation_history": [],
+            }
+
+            assistant_blocks: list[dict[str, Any]] = []
+
+            async for event in graph.astream(input_state):
+                if await request.is_disconnected():
+                    logger.info("Client disconnected: thread_id=%s", thread_id)
+                    return
+
+                # event는 {node_name: node_output} 형태
+                for _node_name, node_output in event.items():
+                    if not isinstance(node_output, dict):
+                        continue
+
+                    blocks = node_output.get("response_blocks", [])
+                    for block in blocks:
+                        if not isinstance(block, dict):
+                            continue
+
+                        block_type = block.get("type", "")
+
+                        if block_type == "text_stream":
+                            # Gemini 토큰 스트리밍
+                            system_prompt = block.get("system", "")
+                            user_prompt = block.get("prompt", query)
+                            full_text = ""
+
+                            async for delta in _stream_gemini(system_prompt, user_prompt):
+                                if await request.is_disconnected():
+                                    return
+                                full_text += delta
+                                yield format_sse_event("text_stream", {"type": "text_stream", "delta": delta})
+
+                            # 저장용 블록은 완성된 텍스트로 교체
+                            assistant_blocks.append({"type": "text_stream", "content": full_text})
+                        else:
+                            # 다른 블록은 그대로 전송 + 저장
+                            yield format_sse_event(block_type, block)
+                            assistant_blocks.append(block)
+
+            # 4. assistant 메시지 INSERT
+            try:
+                await _insert_message(pool, thread_id, "assistant", assistant_blocks)
+            except Exception:
+                logger.exception("assistant message INSERT failed: thread_id=%s", thread_id)
 
         except Exception:
             logger.exception("SSE error: thread_id=%s", thread_id)
