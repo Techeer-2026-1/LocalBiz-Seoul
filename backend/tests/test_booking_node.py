@@ -87,9 +87,10 @@ async def test_restaurant_with_google_places_returns_text_stream() -> None:
 
     pool_mock = _make_pool_mock(category="음식점")
 
-    with patch("src.graph.booking_node.get_pool", return_value=pool_mock), patch(
-        "src.graph.booking_node.get_settings"
-    ) as mock_settings:
+    with (
+        patch("src.graph.booking_node.get_pool", return_value=pool_mock),
+        patch("src.graph.booking_node.get_settings") as mock_settings,
+    ):
         mock_settings.return_value.google_places_api_key = "fake-key"
 
         state = {"processed_query": {"place_id": "uuid-001", "place_name": "스타벅스 강남"}}
@@ -108,9 +109,10 @@ async def test_accommodation_with_dates_returns_yanolja_url() -> None:
     """숙박 + 날짜 있음 → 야놀자/여기어때 URL 포함한 text_stream."""
     pool_mock = _make_pool_mock(category="숙박")
 
-    with patch("src.graph.booking_node.get_pool", return_value=pool_mock), patch(
-        "src.graph.booking_node.get_settings"
-    ) as mock_settings:
+    with (
+        patch("src.graph.booking_node.get_pool", return_value=pool_mock),
+        patch("src.graph.booking_node.get_settings") as mock_settings,
+    ):
         mock_settings.return_value.google_places_api_key = ""
 
         state = {
@@ -134,9 +136,10 @@ async def test_accommodation_missing_dates_returns_error() -> None:
     """숙박 + 날짜 없음 → error 블록 반환."""
     pool_mock = _make_pool_mock(category="호텔")
 
-    with patch("src.graph.booking_node.get_pool", return_value=pool_mock), patch(
-        "src.graph.booking_node.get_settings"
-    ) as mock_settings:
+    with (
+        patch("src.graph.booking_node.get_pool", return_value=pool_mock),
+        patch("src.graph.booking_node.get_settings") as mock_settings,
+    ):
         mock_settings.return_value.google_places_api_key = ""
 
         state = {
@@ -164,9 +167,10 @@ async def test_cache_hit_skips_google_places_api() -> None:
     pool_mock = _make_pool_mock(category="카페")
     state = {"processed_query": {"place_id": "uuid-004", "place_name": "블루보틀 성수"}}
 
-    with patch("src.graph.booking_node.get_pool", return_value=pool_mock), patch(
-        "src.graph.booking_node.get_settings"
-    ) as mock_settings:
+    with (
+        patch("src.graph.booking_node.get_pool", return_value=pool_mock),
+        patch("src.graph.booking_node.get_settings") as mock_settings,
+    ):
         mock_settings.return_value.google_places_api_key = "fake-key"
 
         # 첫 번째 호출 — DB 조회 + API 호출
@@ -183,9 +187,10 @@ async def test_unknown_category_returns_naver_fallback() -> None:
     """unknown 카테고리 → 네이버/카카오 fallback URL 포함."""
     pool_mock = _make_pool_mock(category="unknown")
 
-    with patch("src.graph.booking_node.get_pool", return_value=pool_mock), patch(
-        "src.graph.booking_node.get_settings"
-    ) as mock_settings:
+    with (
+        patch("src.graph.booking_node.get_pool", return_value=pool_mock),
+        patch("src.graph.booking_node.get_settings") as mock_settings,
+    ):
         mock_settings.return_value.google_places_api_key = ""
 
         state = {"processed_query": {"place_id": "uuid-005", "place_name": "어딘가"}}
