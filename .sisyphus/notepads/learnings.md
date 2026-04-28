@@ -61,3 +61,56 @@
 - **dry-run이 실패 아닌 '이상 신호'를 내도 멈추지 말고 재검증**: dry-run 1차 hospital_loc 0 insert, safe_delivery_box 0 insert — "0은 곧 버그"인데 그냥 넘기기 쉬운 수치. source별 expected range를 plan.md §2.4에 미리 써두면 dry-run 결과와 자동 비교 가능. **체크리스트**: loader 후 dry-run 결과를 plan 예측 표에 대입해 편차 > 30% 항목은 무조건 debug.
 - **"폐업이 정상"인 source와 '코드 dup이 정상'인 source 구분**: 약국 인허가 74% 폐업 (회전율 높음, 정상), 공영주차장 87 코드에 45× 중복 (요금/시간대별 row 존재, 정상). dup·skip 높다고 무작정 알람 아님. source별 특성을 이해하고 decision 기록.
 - **인허가 전체 TM 5174 표준 확정**: 약국/동물병원/병원/체력단련/무도장/썰매장/요트장/수영장/공연장/영화상영관 10 source 모두 `좌표정보(X)/(Y)` → EPSG:5174 검증 공유. 서울시 인허가 CSV 표준 좌표계로 정책화.
+
+---
+
+## [2026-04-27] users 테이블 v1→v2 마이그레이션 시 FK 우회 패턴 — 회원가입 PR(#4)
+
+**맥락**: 로컬 docker-compose의 `init_db.sql`이 users v1 (UUID PK)을 만든 상태에서, ERD v6.3 기준 v2 (BIGSERIAL + auth_provider + password_hash + google_id 등)로 변환 필요. 단순 `2026-04-10_erd_p1_foundation.sql` 적용 시 `user_favorites`/`reviews` FK 충돌로 트랜잭션 ROLLBACK.
+
+**우회 패턴 (1 트랜잭션, 안전)**:
+
+```sql
+BEGIN;
+
+-- 1) FK 제거 (테이블은 보존)
+ALTER TABLE user_favorites DROP CONSTRAINT user_favorites_user_id_fkey;
+ALTER TABLE reviews        DROP CONSTRAINT reviews_user_id_fkey;
+ALTER TABLE conversations  DROP CONSTRAINT conversations_user_id_fkey;
+
+-- 2) 의존 테이블 user_id를 UUID → BIGINT 변환 (data 0 row이므로 USING NULL 안전)
+ALTER TABLE user_favorites ALTER COLUMN user_id TYPE BIGINT USING NULL::bigint;
+ALTER TABLE reviews        ALTER COLUMN user_id TYPE BIGINT USING NULL::bigint;
+ALTER TABLE conversations  ALTER COLUMN user_id TYPE BIGINT USING NULL::bigint;
+
+-- 3) users v1 DROP + v2 CREATE (ERD v6.3 + 19 불변식 #15 준수)
+DROP TABLE users;
+CREATE TABLE users (
+    user_id          BIGSERIAL PRIMARY KEY,
+    email            VARCHAR(200) NOT NULL UNIQUE,
+    password_hash    VARCHAR(200),
+    auth_provider    VARCHAR(20) NOT NULL DEFAULT 'email',
+    google_id        VARCHAR(100) UNIQUE,
+    nickname         VARCHAR(100),
+    created_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    updated_at       TIMESTAMPTZ NOT NULL DEFAULT NOW(),
+    is_deleted       BOOLEAN NOT NULL DEFAULT FALSE,
+    CONSTRAINT users_auth_provider_chk CHECK (auth_provider IN ('email','google')),
+    CONSTRAINT users_email_or_google_chk CHECK (
+        (auth_provider='email'  AND password_hash IS NOT NULL AND google_id IS NULL) OR
+        (auth_provider='google' AND password_hash IS NULL     AND google_id IS NOT NULL)
+    )
+);
+CREATE INDEX users_email_idx ON users(email) WHERE is_deleted = FALSE;
+
+-- 4) FK 재설정
+ALTER TABLE user_favorites ADD CONSTRAINT user_favorites_user_id_fkey FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE;
+ALTER TABLE reviews        ADD CONSTRAINT reviews_user_id_fkey        FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE SET NULL;
+ALTER TABLE conversations  ADD CONSTRAINT conversations_user_id_fkey  FOREIGN KEY (user_id) REFERENCES users(user_id) ON DELETE CASCADE;
+
+COMMIT;
+```
+
+**적용 조건**: 로컬 개발 DB만. 의존 테이블에 데이터가 있는 운영 DB에는 NULL 캐스팅 금지 — 데이터 손실. 운영은 별도 backfill plan 필요.
+
+**재사용 가능 위치**: 다음 백엔드 작업자가 docker로 로컬 셋업 시. 영구 해결은 `init_db.sql`을 v2 스키마로 갱신 (별도 plan).

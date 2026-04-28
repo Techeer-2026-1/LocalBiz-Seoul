@@ -17,9 +17,9 @@
 
 **대상 엔드포인트** (1개):
 
-| Method | URL | 기능 |
-|---|---|---|
-| POST | `/api/v1/auth/signup` | 회원가입 (이메일+비밀번호) |
+| Method | URL                   | 기능                       |
+| ------ | --------------------- | -------------------------- |
+| POST   | `/api/v1/auth/signup` | 회원가입 (이메일+비밀번호) |
 
 **5 PR 시리즈 진행 순서** (사용자 합의):
 
@@ -30,6 +30,7 @@
 5. 다음 PR — Google 소셜 로그인 (`POST /api/v1/auth/google`)
 
 **결정사항**:
+
 - JWT: `python-jose[cryptography]==3.3.0`, HS256, access token only, 7일 만료
 - bcrypt cost 12 (`passlib[bcrypt]==1.7.4` + `bcrypt==4.0.1`)
 - email 검증: Pydantic `EmailStr` (`email-validator==2.2.0`)
@@ -37,9 +38,19 @@
 - email 형식 오류 / 비밀번호 8자 미만: HTTP 422 (Pydantic 자동)
 
 **범위 외 (다음 PR로 명시 분리)**:
+
 - 로그인 / 닉네임 / 비번 변경 / Google 로그인 함수·라우트
 - `get_current_user` 의존성 (닉네임 변경 PR에서 도입)
 - 회원 탈퇴, 토큰 refresh, 이메일 인증
+- 로그인 / 닉네임 / 비번 변경 / Google 로그인 함수·라우트
+- `get_current_user` 의존성 (닉네임 변경 PR에서 도입)
+- 회원 탈퇴, 토큰 refresh, 이메일 인증
+
+**미래 의존성 (후속 plan이 본 PR 코드를 변경해야 함)**:
+
+- 회원 탈퇴 plan 구현 시 `signup_email`의 중복 체크 SQL을
+  `WHERE email = $1` → `WHERE email = $1 AND is_deleted = FALSE`로 변경 필요
+  (현재는 탈퇴 후 동일 email 재가입 시 409 반환됨)
 
 ## 2. 영향 범위
 
@@ -62,7 +73,7 @@
 
 - **DB 스키마 영향**: 없음 (users 테이블은 `2026-04-10_erd_p1_foundation.sql`에서 이미 완성)
 
-- **외부 API 호출**: 없음 (Google id_token 검증은 5번 PR에서)
+- **외부 API 호출**: 0건 (`verify_google_id_token` 정의만 존재, 5번 PR에서 호출)
 
 - **응답 블록 16종 영향**: 없음 (REST API)
 
@@ -156,12 +167,14 @@
 ## 6. Metis/Momus 리뷰
 
 **Metis가 검토할 핵심 쟁점**:
+
 1. 공유 인프라(security.py 전체, models/user.py 7종 스키마)를 본 PR에 한꺼번에 넣는 것이 맞나? 회원가입에 즉시 필요 없는 부분이 있는데 dead code로 보일 수 있음
 2. `verify_google_id_token` 함수는 본 PR에서 호출 안 함 — 5번 PR에 분리하면 더 작아지지만, security.py 한 파일을 두 번 수정하는 부담
 3. `tests/conftest.py`의 DB pool fixture가 모든 후속 PR에 공유됨 — 본 PR에서 정착시켜도 OK?
 4. `jwt_secret` 환경변수 미설정 시 회원가입 시점에 RuntimeError. dev 환경 안내가 필요
 
 **Momus가 점검할 권위 위반**:
+
 1. ERD §6 users 컬럼 9개 중 사용하지 않는 컬럼 누락 여부 → INSERT는 4 컬럼(email, password_hash, auth_provider, nickname), `created_at`/`updated_at`/`is_deleted` 모두 default. `google_id`는 NULL. OK
 2. 19 불변식 #15 매트릭스 — INSERT시 `auth_provider='email'` 하드코딩, `google_id` 명시적 NULL은 DB CHECK가 처리하므로 실수 방지
 3. 새 의존성 5종 버전 핀이 requirements.txt 컨벤션과 일치 (`==` 사용)

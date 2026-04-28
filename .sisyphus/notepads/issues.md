@@ -144,3 +144,32 @@ plan #15 loader에서 패턴 재사용됨.
 **broadcast**: 모든 macOS 개발 환경 ETL/파일 탐색 plan.
 
 **2026-04-12 RESOLVED** — load_g2_public_cultural.py + load_g3_health_daily.py 양쪽에 적용 완료.
+
+---
+
+## 2026-04-27 — 회원가입 PR(#4) 셋업 중 발견 함정 3건 (by 메인 Claude, 사후 기록)
+
+**맥락**: plan `2026-04-27-auth-signup-foundation` 코드 작성 → 로컬 검증 진행 중 발견. 본 PR과 무관하지만 다른 백엔드 작업자(정조셉/강민서) 셋업 시 동일 에러 만날 가능성 높음.
+
+### 함정 1 — `src/db/opensearch.py` 의 `AsyncOpenSearch` import 깨짐
+
+- 증상: `python -m uvicorn src.main:app` 시작 시 `ImportError: cannot import name 'AsyncOpenSearch' from 'opensearchpy'`
+- 원인: `requirements.txt`에 `opensearch-py==2.7.1` 핀. `AsyncOpenSearch`는 3.x에서 추가된 클래스. 2.7.1엔 동기 `OpenSearch`만 존재
+- 영향: 모든 백엔드 작업자가 본인 노트북에서 서버 띄우려 할 때 즉시 실패. 본 PR은 pytest로 lifespan 우회하여 검증
+- 해결책 (별도 plan 권장): `requirements.txt`를 `opensearch-py==3.x`로 업그레이드 또는 `src/db/opensearch.py`를 동기 `OpenSearch`로 변경
+
+### 함정 2 — `.env.example`의 `APP_ENV` / `SECRET_KEY`가 `Settings` 클래스에 미정의
+
+- 증상: `Settings()` 초기화 시 `pydantic_core._pydantic_core.ValidationError: Extra inputs are not permitted [APP_ENV, SECRET_KEY]`
+- 원인: `src/config.py`의 `Settings` 클래스는 `extra='forbid'` 동작 (Pydantic v2 default). `.env.example`엔 두 키가 있는데 클래스엔 정의 안 됨
+- 영향: `.env.example`을 그대로 `cp .env.example .env`로 복사한 모든 신규 작업자
+- 해결책 (별도 plan 권장): (1) `Settings`에 `app_env: str = "development"`, `secret_key: Optional[str] = None` 추가 또는 (2) `model_config`에 `extra='ignore'` 추가 또는 (3) `.env.example`에서 두 줄 제거
+
+### 함정 3 — 로컬 docker `init_db.sql` 의 users 테이블이 v1 (UUID) — migrations v2와 drift
+
+- 증상: 회원가입 코드(BIGINT PK + auth_provider 등 v2 가정)와 로컬 DB(UUID PK + email/nickname만, v1) 불일치
+- 원인: `init_db.sql`은 v1 스키마. 마이그레이션 `2026-04-10_erd_p1_foundation.sql`을 적용해야 v2가 됨. 그런데 마이그레이션을 그대로 실행하면 `user_favorites`/`reviews` FK 충돌로 ROLLBACK
+- 영향: 모든 신규 작업자가 docker로 로컬 셋업 시 user 관련 코드 실행 불가
+- 해결책 (사후 보강): 본 PR에서 일회성 SQL로 우회 (FK 제거 → 의존 컬럼 BIGINT 변환 → users DROP+CREATE → FK 재설정). 정식 해결은 `init_db.sql`을 v2 스키마로 갱신 또는 docker-compose 시 마이그레이션 자동 적용 정책 도입 (별도 plan 권장)
+
+**broadcast 대상**: 회원가입 PR 직후 진행될 다음 PR (로그인, 닉네임 변경 등) 작업자 + 다른 백엔드 분 (정조셉/강민서)

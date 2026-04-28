@@ -184,3 +184,31 @@
 - **배경**: boulder.json 445,631 → 실측 535,431 (+89,800). 18 카테고리/48 source. etl-g4-tourism-supplement (plan.md 누락), etl-events (plan.md 존재). 기획서 v1→v2 이동. ERD v6.3 컬럼 사전 신규.
 - **조치 7 step**: (1) CLAUDE.md 경로+단계 수정, (2) 카테고리_분류표 18종 row count 갱신, (3) orphan 1건 사후 plan.md, (4) 메모리 4건 갱신, (5) MEMORY.md 인덱스 정리, (6) boulder.json orphan 배열 정정 + place_analysis "NOT EXISTS" 통일, (7) 본 decisions.md append.
 - **원칙**: 하네스 밖 실행은 예외. 이후 모든 작업은 plan 사이클 내에서만 진행 (사용자 명시 지시).
+
+---
+
+## [2026-04-27] 회원가입 PR(#4) 5개 결정사항 — 후속 4 PR 시리즈 기준선
+
+**plan**: `2026-04-27-auth-signup-foundation`. PM(이정) 셀프 승인.
+
+### 결정 1 — JWT 라이브러리: `python-jose[cryptography]==3.3.0`
+- 대안: PyJWT
+- 선택 이유: 프로젝트 표준. FastAPI tutorial이 python-jose 사용. 후속 4 PR도 동일.
+
+### 결정 2 — 토큰 정책: access token only, 7일 만료
+- 대안: refresh token 즉시 도입
+- 선택 이유: P1 범위 최소화. refresh는 별도 plan. 7일은 모바일 사용 패턴 기준 안전한 디폴트.
+
+### 결정 3 — bcrypt cost 12
+- 대안: 10 (더 빠름) 또는 14 (더 안전)
+- 선택 이유: 250ms 응답 시간 허용 가능 (회원가입은 빈번 호출 아님). OWASP 권장. GCE 인스턴스 부하 적정.
+
+### 결정 4 — 비밀번호 변경: `auth_provider='email'` 사용자 한정
+- 대안: Google 사용자도 별도 비번 설정 가능
+- 선택 이유: SSO 사용자에게 비번 부여는 UX 혼선. Google 사용자가 "내 계정 관리"는 Google 측에서. 본 서비스는 단순화.
+
+### 결정 5 — Google 신규 가입 시 같은 email이 'email' provider로 가입돼 있으면 → 409 Conflict
+- 대안: 자동 계정 통합 (`auth_provider='email'`인 row에 `google_id` 추가)
+- 선택 이유: 19 불변식 #15는 한 row가 한 provider만 가질 수 있게 강제. 자동 통합은 사용자가 인지 못한 상태에서 계정 변경 발생 = 보안 우려. 명시적 "이 email은 이미 비번 가입돼 있어요" 안내가 안전. 별도 "계정 연동" 기능은 후속 plan 권장.
+
+**시리즈 영향**: 결정 1, 3은 후속 4 PR(로그인/Google/닉네임/비번변경)에서 그대로 재사용. 결정 4는 비번 변경 PR(#?)에서 직접 강제. 결정 5는 Google 로그인 PR(#?)에서 직접 강제.
