@@ -36,7 +36,7 @@ class IntentType(StrEnum):  # pyright: ignore[reportAttributeAccessIssue]
     GENERAL = "GENERAL"
 
 
-# Phase 1 intent만 활성 라우팅 대상
+# Phase 1 intent (기획서 기준 전체 목록)
 PHASE1_INTENTS: frozenset[IntentType] = frozenset(  # pyright: ignore[reportAssignmentType]
     {
         IntentType.PLACE_SEARCH,
@@ -48,6 +48,20 @@ PHASE1_INTENTS: frozenset[IntentType] = frozenset(  # pyright: ignore[reportAssi
         IntentType.BOOKING,
         IntentType.CALENDAR,
         IntentType.FAVORITE,
+        IntentType.GENERAL,
+    }
+)
+
+# 실제 그래프에 라우팅 가능한 intent (real_builder.py conditional_edges 기준)
+# 여기에 없는 Phase 1 intent는 GENERAL fallback 처리
+_ROUTABLE_INTENTS: frozenset[IntentType] = frozenset(  # pyright: ignore[reportAssignmentType]
+    {
+        IntentType.PLACE_SEARCH,
+        IntentType.PLACE_RECOMMEND,
+        IntentType.EVENT_SEARCH,
+        IntentType.COURSE_PLAN,
+        IntentType.DETAIL_INQUIRY,
+        IntentType.BOOKING,
         IntentType.GENERAL,
     }
 )
@@ -149,6 +163,11 @@ async def classify_intent(
 
         if intent not in PHASE1_INTENTS:
             logger.info("classify_intent: Phase 2 intent=%s → GENERAL", intent.value)
+            return (_GENERAL_FALLBACK, confidence)
+
+        # 라우팅 맵에 없는 intent는 GENERAL fallback (노드 미구현)
+        if intent not in _ROUTABLE_INTENTS:
+            logger.info("classify_intent: 라우팅 불가 intent=%s → GENERAL", intent.value)
             return (_GENERAL_FALLBACK, confidence)
 
         return (intent, confidence)

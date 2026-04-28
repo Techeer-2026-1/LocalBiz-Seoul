@@ -105,18 +105,16 @@ async def _ensure_seed_user(pool: Any) -> int:
 
 
 async def _ensure_conversation(pool: Any, thread_id: str, user_id: int) -> None:
-    """conversations 테이블에 thread_id가 없으면 auto-create."""
-    row = await pool.fetchrow("SELECT thread_id FROM conversations WHERE thread_id = $1", thread_id)
-    if row:
-        return
+    """conversations 테이블에 thread_id가 없으면 auto-create.
 
+    ON CONFLICT DO NOTHING으로 동시 요청 race condition 방지.
+    """
     await pool.execute(
-        "INSERT INTO conversations (thread_id, user_id, title) VALUES ($1, $2, $3)",
+        "INSERT INTO conversations (thread_id, user_id, title) VALUES ($1, $2, $3) ON CONFLICT (thread_id) DO NOTHING",
         thread_id,
         user_id,
         "새 대화",
     )
-    logger.info("Conversation auto-created: thread_id=%s", thread_id)
 
 
 async def _insert_message(
@@ -192,9 +190,9 @@ async def chat_stream(
         from src.graph.real_builder import build_graph  # pyright: ignore[reportMissingImports]
 
         logger.info(
-            "SSE stream started: thread_id=%s, query=%s",
+            "SSE stream started: thread_id=%s, query_len=%d",
             thread_id,
-            query[:100],
+            len(query),
         )
 
         try:

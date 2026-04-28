@@ -19,7 +19,7 @@
 
 ## 그룹 + 실행 순서
 
-```
+```text
 g1 (병렬: step 1,2,3 — 노드 구현 3종)
   ↓
 g2 (step 4 — real_builder.py import 교체)
