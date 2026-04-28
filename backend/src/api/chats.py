@@ -66,6 +66,7 @@ from fastapi import (
     HTTPException,  # 에러 응답 (404, 401 등)
     Query,  # URL 쿼리 파라미터 정의
 )
+from fastapi.responses import Response  # 204 No Content 등 빈 응답용
 
 # 프로젝트 내부 모듈
 from src.api.deps import (  # pyright: ignore[reportMissingImports]  # 인증 placeholder → JWT 교체 예정
@@ -428,11 +429,11 @@ async def update_chat_title(
 
 # status_code=204: 성공 시 HTTP 204 No Content 반환 (응답 body 없음)
 # REST 관례: DELETE 성공 시 body를 보내지 않는다
-@router.delete("/{thread_id}", status_code=204)
+@router.delete("/{thread_id}", status_code=204, response_class=Response, response_model=None)
 async def delete_chat(
     thread_id: str,
     user_id: int = Depends(get_current_user_id),
-) -> None:  # → None: 반환값 없음 (204 No Content)
+):
     """대화를 소프트 삭제. 물리 삭제가 아닌 is_deleted=true 마킹.
 
     왜 소프트 삭제?
