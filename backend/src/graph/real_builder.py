@@ -15,6 +15,7 @@ from typing import Any, Optional
 
 from langgraph.graph import END, StateGraph
 
+from src.graph.booking_node import booking_node  # pyright: ignore[reportMissingImports]
 from src.graph.state import AgentState
 
 
@@ -72,9 +73,7 @@ async def _detail_inquiry_node(state: AgentState) -> dict[str, Any]:
     return {"response_blocks": []}
 
 
-async def _booking_node(state: AgentState) -> dict[str, Any]:
-    """예약 딥링크 노드 stub."""
-    return {"response_blocks": []}
+# booking_node는 booking_node.py에서 import (위 import 참조)
 
 
 async def _calendar_node(state: AgentState) -> dict[str, Any]:
@@ -144,7 +143,7 @@ def build_graph(checkpointer: Optional[Any] = None) -> Any:
     graph.add_node("course_plan", _course_plan_node)
     graph.add_node("general", _general_node)
     graph.add_node("detail_inquiry", _detail_inquiry_node)
-    graph.add_node("booking", _booking_node)
+    graph.add_node("booking", booking_node)
     graph.add_node("calendar", _calendar_node)
     graph.add_node("response_builder", _response_builder_node)
 
@@ -160,9 +159,11 @@ def build_graph(checkpointer: Optional[Any] = None) -> Any:
             "place_search": "place_search",
             "place_recommend": "place_recommend",
             "event_search": "event_search",
+            "event_recommend": "event_recommend",  # 버그픽스: 누락되어 있던 엣지
             "course_plan": "course_plan",
             "detail_inquiry": "detail_inquiry",
             "booking": "booking",
+            "calendar": "calendar",  # 버그픽스: 누락되어 있던 엣지
             "general": "general",
         },
     )
@@ -172,10 +173,12 @@ def build_graph(checkpointer: Optional[Any] = None) -> Any:
         "place_search",
         "place_recommend",
         "event_search",
+        "event_recommend",  # 버그픽스: 누락되어 있던 엣지
         "course_plan",
         "general",
         "detail_inquiry",
         "booking",
+        "calendar",  # 버그픽스: 누락되어 있던 엣지
     ]:
         graph.add_edge(node_name, "response_builder")
 

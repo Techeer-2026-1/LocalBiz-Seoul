@@ -36,7 +36,11 @@ pydantic-settings==2.6.1
 python-dateutil==2.9.0
 pytz==2024.2
 
+# Config / Utils (booking_node 캐시)
+cachetools==5.5.0
+
 # Testing
 pytest==8.3.3
 pytest-asyncio==0.24.0
 httpx[test]==0.27.2
+respx==0.21.1
