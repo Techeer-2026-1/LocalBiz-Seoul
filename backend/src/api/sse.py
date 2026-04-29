@@ -234,10 +234,13 @@ async def chat_stream(
 
             assistant_blocks: list[dict[str, Any]] = []
 
+            cancelled = False
+
             async for event in graph.astream(input_state):
                 if await request.is_disconnected():
                     logger.info("Client disconnected: thread_id=%s", thread_id)
-                    return
+                    cancelled = True
+                    break
 
                 # event는 {node_name: node_output} 형태
                 for node_name, node_output in event.items():
@@ -264,22 +267,35 @@ async def chat_stream(
 
                             async for delta in _stream_gemini(system_prompt, user_prompt):
                                 if await request.is_disconnected():
-                                    return
+                                    cancelled = True
+                                    break
                                 full_text += delta
                                 yield format_sse_event("text_stream", {"type": "text_stream", "delta": delta})
 
-                            # 저장용 블록은 완성된 텍스트로 교체
-                            assistant_blocks.append({"type": "text_stream", "content": full_text})
+                            # 부분이든 전체든 저장
+                            if full_text:
+                                assistant_blocks.append({"type": "text_stream", "content": full_text})
+
+                            if cancelled:
+                                break
                         else:
                             # 다른 블록은 그대로 전송 + 저장
                             yield format_sse_event(block_type, block)
                             assistant_blocks.append(block)
 
-            # 4. assistant 메시지 INSERT
-            try:
-                await _insert_message(pool, thread_id, "assistant", assistant_blocks)
-            except Exception:
-                logger.exception("assistant message INSERT failed: thread_id=%s", thread_id)
+                    if cancelled:
+                        break
+
+            # 4. cancelled done 전송 (클라이언트가 이미 끊겼어도 시도)
+            if cancelled:
+                yield format_done_event(status="cancelled")
+
+            # 5. assistant 메시지 INSERT (부분 응답 포함)
+            if assistant_blocks:
+                try:
+                    await _insert_message(pool, thread_id, "assistant", assistant_blocks)
+                except Exception:
+                    logger.exception("assistant message INSERT failed: thread_id=%s", thread_id)
 
         except Exception:
             logger.exception("SSE error: thread_id=%s", thread_id)
