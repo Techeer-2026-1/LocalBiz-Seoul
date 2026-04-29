@@ -1,4 +1,4 @@
-"""LangGraph 그래프 빌더 — 노드/엣지 인터페이스 스텁.
+"""LangGraph 그래프 빌더 — 노드/엣지 구성.
 
 StateGraph(AgentState)를 구성하고 compiled graph를 반환.
 각 노드의 실제 로직은 별도 *_node.py 파일에서 구현.
@@ -15,18 +15,15 @@ from typing import Any, Optional
 
 from langgraph.graph import END, StateGraph
 
-from src.graph.state import AgentState
+from src.graph.general_node import general_node  # pyright: ignore[reportMissingImports]
+from src.graph.intent_router_node import intent_router_node  # pyright: ignore[reportMissingImports]
+from src.graph.response_builder_node import response_builder_node  # pyright: ignore[reportMissingImports]
+from src.graph.state import AgentState  # pyright: ignore[reportMissingImports]
 
 
 # ---------------------------------------------------------------------------
-# 노드 함수 스텁 — 각 *_node.py에서 실제 구현 후 import 교체
+# 아직 실제 구현이 없는 노드 스텁
 # ---------------------------------------------------------------------------
-async def _intent_router_node(state: AgentState) -> dict[str, Any]:
-    """Intent 분류 노드 stub. 실제 구현: intent_router_node.py."""
-    # TODO: from src.graph.intent_router_node import classify_intent
-    return {"intent": "GENERAL"}
-
-
 async def _query_preprocessor_node(state: AgentState) -> dict[str, Any]:
     """공통 쿼리 전처리 노드 stub (불변식 #12).
 
@@ -62,11 +59,6 @@ async def _course_plan_node(state: AgentState) -> dict[str, Any]:
     return {"response_blocks": []}
 
 
-async def _general_node(state: AgentState) -> dict[str, Any]:
-    """일반 대화 노드 stub (Gemini 호출)."""
-    return {"response_blocks": []}
-
-
 async def _detail_inquiry_node(state: AgentState) -> dict[str, Any]:
     """상세 조회 노드 stub."""
     return {"response_blocks": []}
@@ -79,11 +71,6 @@ async def _booking_node(state: AgentState) -> dict[str, Any]:
 
 async def _calendar_node(state: AgentState) -> dict[str, Any]:
     """일정 추가 노드 stub (Google Calendar MCP)."""
-    return {"response_blocks": []}
-
-
-async def _response_builder_node(state: AgentState) -> dict[str, Any]:
-    """응답 빌더 노드 — intent별 블록 순서 검증 + done 블록 추가."""
     return {"response_blocks": []}
 
 
@@ -134,19 +121,19 @@ def build_graph(checkpointer: Optional[Any] = None) -> Any:
     """
     graph = StateGraph(AgentState)
 
-    # 노드 등록
-    graph.add_node("intent_router", _intent_router_node)
+    # 노드 등록 — 실제 구현 3종 + 스텁 나머지
+    graph.add_node("intent_router", intent_router_node)
     graph.add_node("query_preprocessor", _query_preprocessor_node)
     graph.add_node("place_search", _place_search_node)
     graph.add_node("place_recommend", _place_recommend_node)
     graph.add_node("event_search", _event_search_node)
     graph.add_node("event_recommend", _event_recommend_node)
     graph.add_node("course_plan", _course_plan_node)
-    graph.add_node("general", _general_node)
+    graph.add_node("general", general_node)
     graph.add_node("detail_inquiry", _detail_inquiry_node)
     graph.add_node("booking", _booking_node)
     graph.add_node("calendar", _calendar_node)
-    graph.add_node("response_builder", _response_builder_node)
+    graph.add_node("response_builder", response_builder_node)
 
     # 엣지 설정
     graph.set_entry_point("intent_router")
