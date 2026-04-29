@@ -3,8 +3,8 @@
 - Phase: Infra
 - 요청자: 이정
 - 작성일: 2026-04-29
-- 상태: approved
-- 최종 결정: APPROVED (Metis 001-okay + Momus 002-approved, 2026-04-29)
+- 상태: COMPLETE
+- 최종 결정: APPROVED → COMPLETE (2026-04-29)
 
 ## 1. 요구사항
 

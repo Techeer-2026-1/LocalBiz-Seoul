@@ -102,4 +102,4 @@ rm -f .sisyphus/state/planning_mode.flag
 
 ## 7. 최종 결정
 
-PENDING (Metis/Momus 통과 시 APPROVED로 갱신)
+APPROVED → COMPLETE (2026-04-27)
