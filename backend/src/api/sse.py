@@ -80,6 +80,24 @@ def format_done_event(
 
 
 # ---------------------------------------------------------------------------
+# 노드별 status 메시지 (SSE 제어 이벤트, DB 미저장)
+# ---------------------------------------------------------------------------
+_NODE_STATUS_MESSAGES: dict[str, str] = {
+    "intent_router": "의도를 분석하고 있어요...",
+    "query_preprocessor": "질문을 정리하고 있어요...",
+    "place_search": "장소를 검색하고 있어요...",
+    "place_recommend": "장소를 추천하고 있어요...",
+    "event_search": "행사를 검색하고 있어요...",
+    "event_recommend": "행사를 추천하고 있어요...",
+    "course_plan": "코스를 계획하고 있어요...",
+    "general": "답변을 생성하고 있어요...",
+    "detail_inquiry": "상세 정보를 조회하고 있어요...",
+    "booking": "예약 정보를 확인하고 있어요...",
+    "calendar": "일정을 추가하고 있어요...",
+}
+
+
+# ---------------------------------------------------------------------------
 # DB 헬퍼 — seed user, conversations, messages
 # ---------------------------------------------------------------------------
 async def _ensure_seed_user(pool: Any) -> int:
@@ -216,15 +234,23 @@ async def chat_stream(
 
             assistant_blocks: list[dict[str, Any]] = []
 
+            cancelled = False
+
             async for event in graph.astream(input_state):
                 if await request.is_disconnected():
                     logger.info("Client disconnected: thread_id=%s", thread_id)
-                    return
+                    cancelled = True
+                    break
 
                 # event는 {node_name: node_output} 형태
-                for _node_name, node_output in event.items():
+                for node_name, node_output in event.items():
                     if not isinstance(node_output, dict):
                         continue
+
+                    # 노드 전환 시 status 이벤트 전송 (DB 미저장)
+                    status_msg = _NODE_STATUS_MESSAGES.get(node_name)
+                    if status_msg:
+                        yield format_status_event(status_msg, node=node_name)
 
                     blocks = node_output.get("response_blocks", [])
                     for block in blocks:
@@ -241,22 +267,35 @@ async def chat_stream(
 
                             async for delta in _stream_gemini(system_prompt, user_prompt):
                                 if await request.is_disconnected():
-                                    return
+                                    cancelled = True
+                                    break
                                 full_text += delta
                                 yield format_sse_event("text_stream", {"type": "text_stream", "delta": delta})
 
-                            # 저장용 블록은 완성된 텍스트로 교체
-                            assistant_blocks.append({"type": "text_stream", "content": full_text})
+                            # 부분이든 전체든 저장
+                            if full_text:
+                                assistant_blocks.append({"type": "text_stream", "content": full_text})
+
+                            if cancelled:
+                                break
                         else:
                             # 다른 블록은 그대로 전송 + 저장
                             yield format_sse_event(block_type, block)
                             assistant_blocks.append(block)
 
-            # 4. assistant 메시지 INSERT
-            try:
-                await _insert_message(pool, thread_id, "assistant", assistant_blocks)
-            except Exception:
-                logger.exception("assistant message INSERT failed: thread_id=%s", thread_id)
+                    if cancelled:
+                        break
+
+            # 4. cancelled done 전송 (클라이언트가 이미 끊겼어도 시도)
+            if cancelled:
+                yield format_done_event(status="cancelled")
+
+            # 5. assistant 메시지 INSERT (부분 응답 포함)
+            if assistant_blocks:
+                try:
+                    await _insert_message(pool, thread_id, "assistant", assistant_blocks)
+                except Exception:
+                    logger.exception("assistant message INSERT failed: thread_id=%s", thread_id)
 
         except Exception:
             logger.exception("SSE error: thread_id=%s", thread_id)

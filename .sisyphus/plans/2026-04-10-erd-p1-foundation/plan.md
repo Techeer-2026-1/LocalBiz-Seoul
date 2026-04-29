@@ -4,8 +4,8 @@
 - 요청자: 이정 (PM)
 - 작성일: 2026-04-10
 - 갱신일: 2026-04-11 (user_oauth_tokens 추가, 백업 생략, ERD v6.2 반영)
-- 상태: approved + 실행 진입
-- 최종 결정: APPROVED
+- 상태: COMPLETE
+- 최종 결정: APPROVED → COMPLETE
 
 ## 1. 요구사항
 

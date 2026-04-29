@@ -3,8 +3,8 @@
 - Phase: P1 / Infra
 - 요청자: 이정
 - 작성일: 2026-04-27
-- 상태: approved
-- 최종 결정: APPROVED
+- 상태: COMPLETE
+- 최종 결정: APPROVED → COMPLETE
 
 > 상태 워크플로: draft → review → approved → done
 > Metis/Momus 리뷰 통과 후 마지막 라인을 `최종 결정: APPROVED`로 변경하면 planning_mode flag 해제.

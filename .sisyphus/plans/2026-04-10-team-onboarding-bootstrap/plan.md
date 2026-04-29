@@ -3,8 +3,8 @@
 - Phase: Infra
 - 요청자: 이정 (PM)
 - 작성일: 2026-04-10
-- 상태: approved
-- 최종 결정: APPROVED
+- 상태: COMPLETE
+- 최종 결정: APPROVED → COMPLETE
 
 ## 1. 요구사항
 

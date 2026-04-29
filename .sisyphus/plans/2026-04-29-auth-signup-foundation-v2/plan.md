@@ -3,8 +3,8 @@
 - Phase: P1
 - 요청자: 이정 (BE/PM)
 - 작성일: 2026-04-29 (v2 — dev 머지 충돌로 v1 폐기 후 재시작)
-- 상태: approved
-- 최종 결정: APPROVED
+- 상태: COMPLETE
+- 최종 결정: APPROVED → COMPLETE (PR #13 머지, 2026-04-29)
 - GitHub Issue: #4
 - 시리즈: 인증/사용자 관리 5개 PR 중 1번째
 

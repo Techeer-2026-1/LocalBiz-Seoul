@@ -14,8 +14,6 @@
 # 1. clone
 gh repo clone Techeer-2026-1/LocalBiz-Seoul && cd LocalBiz-Seoul
 
-# 2. 1Password vault 열기 → "AnyWay-Dev-Shared" 항목 (PM 이정에게 vault 초대 요청)
-
 # 3. backend venv + 의존성
 cd backend
 python3.11 -m venv venv

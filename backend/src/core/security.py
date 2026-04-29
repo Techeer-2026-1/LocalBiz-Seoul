@@ -9,7 +9,7 @@ Phase 1 — access token 단일. refresh token은 후속 plan에서.
 
 from __future__ import annotations
 
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, datetime, timedelta  # pyright: ignore[reportAttributeAccessIssue]
 from typing import Any, Optional
 
 from google.auth.transport import requests as google_requests
@@ -96,9 +96,11 @@ def verify_google_id_token(token: str, client_id: str) -> dict[str, Any]:
       - email_verified: bool
       - name: 표시 이름 (닉네임 후보, 없을 수 있음)
     """
-    payload: dict[str, Any] = google_id_token.verify_oauth2_token(
-        token,
-        google_requests.Request(),
-        client_id,
+    payload: dict[str, Any] = dict(
+        google_id_token.verify_oauth2_token(
+            token,
+            google_requests.Request(),
+            client_id,
+        )
     )
     return payload
