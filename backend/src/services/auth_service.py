@@ -8,6 +8,11 @@
 
 DB CHECK 제약 (users_email_or_google_chk)이 위반을 차단하지만,
 코드에서도 명시적으로 분기하여 INSERT.
+
+동시성 정책 (CodeRabbit #4 권장 반영):
+  - check-then-insert 패턴 금지 (race window 발생 가능)
+  - INSERT ... ON CONFLICT DO NOTHING RETURNING 으로 atomic 보장
+  - 결과가 None이면 동시에 다른 요청이 같은 email로 가입 성공 → 409
 """
 
 from __future__ import annotations
@@ -53,39 +58,39 @@ async def signup_email(req: SignupRequest) -> TokenResponse:
 
     실패:
       409 — 이메일 중복
+
+    구현 노트:
+      check-then-insert (SELECT then INSERT) 패턴은 race window가 있어
+      두 동시 요청이 둘 다 SELECT를 통과한 뒤 한쪽이 UNIQUE 제약 위반으로
+      DB 예외를 일으킬 수 있다. atomic INSERT ... ON CONFLICT DO NOTHING
+      RETURNING 으로 한 번에 처리하여 race-safe.
     """
     pool = get_pool()
 
-    # 1) 중복 체크 (is_deleted 포함 — 같은 email 재가입 정책은 후속 plan)
-    existing = await pool.fetchrow(
-        "SELECT user_id FROM users WHERE email = $1",
-        req.email,
-    )
-    if existing is not None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="email already exists",
-        )
-
-    # 2) bcrypt 해싱 (cost 12)
+    # 1) bcrypt 해싱 (cost 12) — INSERT 전에 미리 계산
     pw_hash = hash_password(req.password)
 
-    # 3) INSERT — auth_provider='email' 고정, google_id NULL
+    # 2) Atomic INSERT — auth_provider='email' 고정, google_id NULL.
+    # ON CONFLICT (email) DO NOTHING: 같은 email이 이미 있으면 INSERT 안 함 + RETURNING None.
+    # email_idx (partial index WHERE is_deleted=FALSE)와 별개로 users.email UNIQUE constraint가
+    # row 0건이든 100건이든 동일하게 작동한다.
     row = await pool.fetchrow(
         """
         INSERT INTO users (email, password_hash, auth_provider, nickname)
         VALUES ($1, $2, 'email', $3)
+        ON CONFLICT (email) DO NOTHING
         RETURNING user_id, email, nickname
         """,
         req.email,
         pw_hash,
         req.nickname,
     )
+
+    # 3) 결과 None = ON CONFLICT 발동 = 이미 존재하는 email = 409
     if row is None:
-        # 정상 흐름에선 도달 불가 — INSERT 실패 시 asyncpg가 예외 raise
         raise HTTPException(
-            status_code=status.HTTP_500_INTERNAL_SERVER_ERROR,
-            detail="failed to create user",
+            status_code=status.HTTP_409_CONFLICT,
+            detail="email already exists",
         )
 
     return _build_token_response(
