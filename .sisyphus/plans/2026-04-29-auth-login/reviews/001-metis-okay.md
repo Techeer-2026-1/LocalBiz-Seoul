@@ -20,7 +20,7 @@
 ### §1 범위 정합
 
 명세상 로그인 API 시그니처:
-```
+```http
 POST /api/v1/auth/login
 요청: { email, password }
 응답 200: { access_token, token_type, user_id, email, nickname }

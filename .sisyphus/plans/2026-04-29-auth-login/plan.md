@@ -130,6 +130,6 @@
 
 ## 7. 최종 결정
 
-> ⚠️ 본 plan은 메인 Claude(웹 Claude)와 사용자 협업으로 진행. Claude Code가 미설치라 Metis/Momus가 진정 spawn되지는 않음. 메인 Claude가 페르소나 채택하여 reviews 파일 작성. 회원가입 PR(v1 약식, v2 정공)에 이은 본인 시스템 정공 사이클 두 번째.
+> ⚠️ 본 plan은 메인 Claude(웹 Claude)와 사용자 협업으로 진행. Claude Code가 미설치라 Metis/Momus가 실제로 spawn되지는 않음. 메인 Claude가 페르소나 채택하여 reviews 파일 작성. 회원가입 PR(v1 약식, v2 정공)에 이은 본인 시스템 정공 사이클 두 번째.
 
 APPROVED (Metis okay 001, Momus approved 002)
