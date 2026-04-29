@@ -79,6 +79,18 @@ def format_done_event(
     return format_block_event(done)
 
 
+def format_error_event(
+    code: str,
+    message: str,
+    recoverable: bool = True,
+) -> str:
+    """error 이벤트 생성 (DB 미저장, SSE 전송만)."""
+    from src.models.blocks import ErrorBlock  # pyright: ignore[reportMissingImports]
+
+    error = ErrorBlock(code=code, message=message, recoverable=recoverable)
+    return format_block_event(error)
+
+
 # ---------------------------------------------------------------------------
 # 노드별 status 메시지 (SSE 제어 이벤트, DB 미저장)
 # ---------------------------------------------------------------------------
@@ -215,7 +227,14 @@ async def chat_stream(
 
         try:
             # 1. DB 준비 — seed user + conversation
-            pool = get_pool()
+            try:
+                pool = get_pool()
+            except RuntimeError:
+                logger.exception("DB pool 미획득: thread_id=%s", thread_id)
+                yield format_error_event("DB_POOL_UNAVAILABLE", "서버 DB 연결에 실패했습니다.", recoverable=False)
+                yield format_done_event(status="error", error_message="서버 DB 연결에 실패했습니다.")
+                return
+
             user_id = await _ensure_seed_user(pool)
             await _ensure_conversation(pool, thread_id, user_id)
 
@@ -233,8 +252,8 @@ async def chat_stream(
             }
 
             assistant_blocks: list[dict[str, Any]] = []
-
             cancelled = False
+            gemini_error = False
 
             async for event in graph.astream(input_state):
                 if await request.is_disconnected():
@@ -265,30 +284,37 @@ async def chat_stream(
                             user_prompt = block.get("prompt", query)
                             full_text = ""
 
-                            async for delta in _stream_gemini(system_prompt, user_prompt):
-                                if await request.is_disconnected():
-                                    cancelled = True
-                                    break
-                                full_text += delta
-                                yield format_sse_event("text_stream", {"type": "text_stream", "delta": delta})
+                            try:
+                                async for delta in _stream_gemini(system_prompt, user_prompt):
+                                    if await request.is_disconnected():
+                                        cancelled = True
+                                        break
+                                    full_text += delta
+                                    yield format_sse_event("text_stream", {"type": "text_stream", "delta": delta})
+                            except Exception:
+                                logger.exception("Gemini streaming failed: thread_id=%s", thread_id)
+                                gemini_error = True
 
                             # 부분이든 전체든 저장
                             if full_text:
                                 assistant_blocks.append({"type": "text_stream", "content": full_text})
 
-                            if cancelled:
+                            if cancelled or gemini_error:
                                 break
                         else:
                             # 다른 블록은 그대로 전송 + 저장
                             yield format_sse_event(block_type, block)
                             assistant_blocks.append(block)
 
-                    if cancelled:
+                    if cancelled or gemini_error:
                         break
 
-            # 4. cancelled done 전송 (클라이언트가 이미 끊겼어도 시도)
+            # 4. 종료 이벤트
             if cancelled:
                 yield format_done_event(status="cancelled")
+            elif gemini_error:
+                yield format_error_event("GEMINI_API_ERROR", "AI 응답 생성에 실패했습니다.", recoverable=True)
+                yield format_done_event(status="error", error_message="AI 응답 생성에 실패했습니다.")
 
             # 5. assistant 메시지 INSERT (부분 응답 포함)
             if assistant_blocks:
@@ -299,7 +325,8 @@ async def chat_stream(
 
         except Exception:
             logger.exception("SSE error: thread_id=%s", thread_id)
-            yield format_done_event(status="error", error_message="Internal server error")
+            yield format_error_event("INTERNAL_ERROR", "서버 내부 오류가 발생했습니다.", recoverable=True)
+            yield format_done_event(status="error", error_message="서버 내부 오류가 발생했습니다.")
 
     return StreamingResponse(
         event_generator(),
