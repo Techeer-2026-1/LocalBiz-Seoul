@@ -205,6 +205,7 @@ async def chat_stream(
     thread_id: str,
     query: str,
     token: Optional[str] = None,
+    retry: bool = False,
 ) -> StreamingResponse:
     """메인 채팅 SSE 엔드포인트.
 
@@ -213,6 +214,7 @@ async def chat_stream(
         thread_id: 대화 스레드 ID.
         query: 사용자 쿼리 텍스트.
         token: JWT 토큰 (query parameter fallback).
+        retry: True이면 응답 재생성 (user INSERT 생략, append-only 준수).
     """
 
     async def event_generator() -> AsyncIterator[str]:
@@ -238,9 +240,21 @@ async def chat_stream(
             user_id = await _ensure_seed_user(pool)
             await _ensure_conversation(pool, thread_id, user_id)
 
-            # 2. user 메시지 INSERT
-            user_blocks: list[dict[str, Any]] = [{"type": "text", "content": query}]
-            await _insert_message(pool, thread_id, "user", user_blocks)
+            # 2. user 메시지 INSERT (retry 시 생략)
+            if retry:
+                # 방어: 해당 thread에 user 메시지 존재 확인
+                has_user = await pool.fetchrow(
+                    "SELECT 1 FROM messages WHERE thread_id = $1 AND role = $2 LIMIT 1",
+                    thread_id,
+                    "user",
+                )
+                if not has_user:
+                    # user 메시지 없으면 fallback → 일반 요청처럼 INSERT
+                    user_blocks: list[dict[str, Any]] = [{"type": "text", "content": query}]
+                    await _insert_message(pool, thread_id, "user", user_blocks)
+            else:
+                user_blocks = [{"type": "text", "content": query}]
+                await _insert_message(pool, thread_id, "user", user_blocks)
 
             # 3. LangGraph astream() 실행
             graph = build_graph(checkpointer=None)
@@ -302,26 +316,31 @@ async def chat_stream(
                             if cancelled or gemini_error:
                                 break
                         else:
-                            # 다른 블록은 그대로 전송 + 저장
-                            yield format_sse_event(block_type, block)
-                            assistant_blocks.append(block)
+                            # done 블록은 루프 후에 전송 (INSERT→done 순서 보장)
+                            if block_type == "done":
+                                assistant_blocks.append(block)
+                            else:
+                                yield format_sse_event(block_type, block)
+                                assistant_blocks.append(block)
 
                     if cancelled or gemini_error:
                         break
 
-            # 4. 종료 이벤트
-            if cancelled:
-                yield format_done_event(status="cancelled")
-            elif gemini_error:
-                yield format_error_event("GEMINI_API_ERROR", "AI 응답 생성에 실패했습니다.", recoverable=True)
-                yield format_done_event(status="error", error_message="AI 응답 생성에 실패했습니다.")
-
-            # 5. assistant 메시지 INSERT (부분 응답 포함)
+            # 4. assistant 메시지 INSERT (done 전에 완료)
             if assistant_blocks:
                 try:
                     await _insert_message(pool, thread_id, "assistant", assistant_blocks)
                 except Exception:
                     logger.exception("assistant message INSERT failed: thread_id=%s", thread_id)
+
+            # 5. 종료 이벤트 (INSERT 후 전송)
+            if cancelled:
+                yield format_done_event(status="cancelled")
+            elif gemini_error:
+                yield format_error_event("GEMINI_API_ERROR", "AI 응답 생성에 실패했습니다.", recoverable=True)
+                yield format_done_event(status="error", error_message="AI 응답 생성에 실패했습니다.")
+            else:
+                yield format_done_event(status="done")
 
         except Exception:
             logger.exception("SSE error: thread_id=%s", thread_id)

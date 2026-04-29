@@ -58,4 +58,4 @@
 
 ## 7. 최종 결정
 
-PENDING (Metis 재검토 필요)
+APPROVED → COMPLETE (Metis 002-okay + Momus 003-okay, 2026-04-29)
