@@ -1,7 +1,7 @@
 """AnyWay backend — FastAPI 진입점.
 
 FastAPI 앱 객체를 생성하고, 서버 시작/종료 시 DB 커넥션 풀을 관리한다.
-각 API 라우터(chats, sse 등)를 여기서 등록한다.
+각 API 라우터(auth, chats, sse 등)를 여기서 등록한다.
 
 핵심 개념:
   - FastAPI: Python 비동기 웹 프레임워크. Flask와 비슷하지만 async/await 네이티브.
@@ -84,9 +84,11 @@ app = FastAPI(
 # 각 파일에서 정의한 router를 앱에 연결.
 # include_router 하면 해당 라우터의 모든 엔드포인트가 앱에 추가된다.
 # 예: chats_router의 GET /api/v1/chats → app.get("/api/v1/chats")로 등록
+from src.api.auth import router as auth_router  # noqa: E402  # pyright: ignore[reportMissingImports]
 from src.api.chats import router as chats_router  # noqa: E402  # pyright: ignore[reportMissingImports]
 from src.api.sse import router as sse_router  # noqa: E402  # pyright: ignore[reportMissingImports]
 
+app.include_router(auth_router)  # /api/v1/auth/* 엔드포인트 (회원가입 등)
 app.include_router(chats_router)  # /api/v1/chats/* 엔드포인트 5개
 app.include_router(sse_router)  # /api/v1/chat/stream SSE 엔드포인트
 
