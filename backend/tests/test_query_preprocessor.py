@@ -14,7 +14,7 @@ import pytest
 @pytest.mark.asyncio
 async def test_general_intent_returns_empty() -> None:
     """GENERAL intent → 빈 dict 반환 (Gemini 호출 생략)."""
-    from src.graph.query_preprocessor_node import query_preprocessor_node
+    from src.graph.query_preprocessor_node import query_preprocessor_node  # pyright: ignore[reportMissingImports]
 
     state: dict[str, Any] = {
         "query": "안녕하세요",
@@ -39,12 +39,18 @@ async def test_normal_query_extracts_fields() -> None:
         ' "time_reference": null}'
     )
 
-    with patch("langchain_google_genai.ChatGoogleGenerativeAI") as mock_llm_cls:
+    mock_settings = AsyncMock()
+    mock_settings.gemini_llm_api_key = "fake-key-for-test"
+
+    with (
+        patch("src.config.get_settings", return_value=mock_settings),
+        patch("langchain_google_genai.ChatGoogleGenerativeAI") as mock_llm_cls,
+    ):
         mock_llm = AsyncMock()
         mock_llm.ainvoke = AsyncMock(return_value=mock_response)
         mock_llm_cls.return_value = mock_llm
 
-        from src.graph.query_preprocessor_node import query_preprocessor_node
+        from src.graph.query_preprocessor_node import query_preprocessor_node  # pyright: ignore[reportMissingImports]
 
         state: dict[str, Any] = {
             "query": "홍대 분위기 좋은 카페",
@@ -63,12 +69,18 @@ async def test_normal_query_extracts_fields() -> None:
 @pytest.mark.asyncio
 async def test_gemini_failure_returns_empty() -> None:
     """Gemini 실패 → 빈 dict fallback."""
-    with patch("langchain_google_genai.ChatGoogleGenerativeAI") as mock_llm_cls:
+    mock_settings = AsyncMock()
+    mock_settings.gemini_llm_api_key = "fake-key-for-test"
+
+    with (
+        patch("src.config.get_settings", return_value=mock_settings),
+        patch("langchain_google_genai.ChatGoogleGenerativeAI") as mock_llm_cls,
+    ):
         mock_llm = AsyncMock()
         mock_llm.ainvoke = AsyncMock(side_effect=Exception("API error"))
         mock_llm_cls.return_value = mock_llm
 
-        from src.graph.query_preprocessor_node import query_preprocessor_node
+        from src.graph.query_preprocessor_node import query_preprocessor_node  # pyright: ignore[reportMissingImports]
 
         state: dict[str, Any] = {
             "query": "강남 맛집",

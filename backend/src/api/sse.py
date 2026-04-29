@@ -242,14 +242,29 @@ async def chat_stream(
 
             # 2. user 메시지 INSERT (retry 시 생략)
             if retry:
-                # 방어: 해당 thread에 user 메시지 존재 확인
-                has_user = await pool.fetchrow(
-                    "SELECT 1 FROM messages WHERE thread_id = $1 AND role = $2 LIMIT 1",
+                # 방어: 해당 thread의 마지막 'user' 메시지가 현재 쿼리와 같은지 확인
+                # retry=true여도 쿼리가 바뀌었다면 새로운 턴으로 간주하고 INSERT 해야 함
+                last_user_msg = await pool.fetchrow(
+                    "SELECT blocks FROM messages WHERE thread_id = $1 AND role = 'user' ORDER BY message_id DESC LIMIT 1",
                     thread_id,
-                    "user",
                 )
-                if not has_user:
-                    # user 메시지 없으면 fallback → 일반 요청처럼 INSERT
+                is_same_query = False
+                if last_user_msg:
+                    try:
+                        blocks = last_user_msg["blocks"]
+                        # blocks가 리스트이고 첫 번째 블록이 텍스트이며 내용이 같으면 중복으로 간주
+                        if (
+                            isinstance(blocks, list)
+                            and len(blocks) > 0
+                            and blocks[0].get("type") == "text"
+                            and blocks[0].get("content") == query
+                        ):
+                            is_same_query = True
+                    except Exception:
+                        logger.warning("Failed to check last user message: thread_id=%s", thread_id)
+
+                if not is_same_query:
+                    # 유저 메시지가 없거나 내용이 다르면(새로운 질문이면) fallback → INSERT
                     user_blocks: list[dict[str, Any]] = [{"type": "text", "content": query}]
                     await _insert_message(pool, thread_id, "user", user_blocks)
             else:
@@ -327,11 +342,13 @@ async def chat_stream(
                         break
 
             # 4. assistant 메시지 INSERT (done 전에 완료)
+            persistence_success = True
             if assistant_blocks:
                 try:
                     await _insert_message(pool, thread_id, "assistant", assistant_blocks)
                 except Exception:
                     logger.exception("assistant message INSERT failed: thread_id=%s", thread_id)
+                    persistence_success = False
 
             # 5. 종료 이벤트 (INSERT 후 전송)
             if cancelled:
@@ -339,6 +356,9 @@ async def chat_stream(
             elif gemini_error:
                 yield format_error_event("GEMINI_API_ERROR", "AI 응답 생성에 실패했습니다.", recoverable=True)
                 yield format_done_event(status="error", error_message="AI 응답 생성에 실패했습니다.")
+            elif not persistence_success:
+                yield format_error_event("PERSISTENCE_ERROR", "응답 저장에 실패했습니다.", recoverable=True)
+                yield format_done_event(status="error", error_message="응답 저장에 실패했습니다.")
             else:
                 yield format_done_event(status="done")
 

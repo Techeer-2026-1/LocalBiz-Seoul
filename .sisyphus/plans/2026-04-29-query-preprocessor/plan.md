@@ -126,8 +126,8 @@ GENERAL intent는 전처리 불필요 — 빈 dict 반환 (현재 동작 유지)
 
 ## 6. Metis/Momus 리뷰
 
-PENDING
+- 001-metis-okay, 002-momus-approved (2026-04-29)
 
 ## 7. 최종 결정
 
-PENDING
+APPROVED (2026-04-29)

@@ -17,13 +17,7 @@ input=$(cat)
 python3 - "$input" <<'PY'
 import sys, json, re
 
-try:
-    data = json.loads(sys.argv[1])
-except Exception:
-    # fail-closed: JSON 파싱 실패 시 차단 (보안상 통과시키면 안 됨)
-    sys.stderr.write("[pre_bash_guard] JSON 파싱 실패 — 차단\n")
-    sys.exit(2)
-
+data = json.loads(sys.argv[1])
 cmd = data.get("tool_input", {}).get("command", "") or ""
 if not cmd.strip():
     sys.exit(0)

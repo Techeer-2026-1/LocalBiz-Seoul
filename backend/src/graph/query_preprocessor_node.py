@@ -102,7 +102,8 @@ async def _extract_query_fields(
         result.setdefault("expanded_query", query)
         result.setdefault("keywords", [])
 
-        logger.info("query_preprocessor: intent=%s, result=%s", intent, json.dumps(result, ensure_ascii=False)[:200])
+        # PII 유출 방지를 위해 결과의 키 목록과 intent만 로깅
+        logger.info("query_preprocessor: intent=%s, extracted_keys=%s", intent, list(result.keys()))
         return result
 
     except Exception:

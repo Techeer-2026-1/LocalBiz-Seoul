@@ -88,8 +88,8 @@ GET /api/v1/chat/stream?thread_id=xxx&query=안녕&retry=true
 
 ## 6. Metis/Momus 리뷰
 
-- 001-metis-okay, 002-momus-reject (방어 로직 / 체크리스트 / 테스트)
+- 001-metis-okay, 002-momus-approved (2026-04-29)
 
 ## 7. 최종 결정
 
-PENDING
+APPROVED (2026-04-29)
