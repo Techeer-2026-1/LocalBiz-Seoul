@@ -23,7 +23,7 @@
 - 보안: 본인 nickname만 변경 가능. 다른 사용자 user_id로 변경 시도 불가능 (deps.py가 토큰의 sub만 받기 때문에 자동 강제).
 - 동시성: UPDATE 단일 SQL이라 race window 없음. 같은 사용자 동시 변경 시 last-write-wins (운영상 허용).
 - 19 불변식 #15: auth_provider와 무관하게 nickname 변경 가능 (email/google 사용자 모두).
-- PII 보호 (CodeRabbit #3, 로그인 PR #2 학습 적용): 모든 logger 호출에 `_mask_email()` 사용.
+- PII 보호 (CodeRabbit #3, 로그인 PR #2 학습 적용): logger 호출 시 user_id 위주로 기록. email 인자가 있는 함수에서만 `_mask_email()` 사용.
 
 **범위 외 (다음 PR로 명시 분리)**:
 
@@ -138,7 +138,7 @@
 - ⚠️ is_deleted 체크 — 탈퇴자가 이전 토큰으로 nickname 변경 시도. UPDATE WHERE 절에 `is_deleted = FALSE` 명시. RETURNING None이면 404.
 - ⚠️ updated_at 갱신 — UPDATE 시 `updated_at = NOW()` 명시. 누락 시 19 불변식 #2 (timestamp) 위반.
 - ⚠️ auth_provider 무관 — email/google 사용자 모두 nickname 변경 가능 (명세 일치). UPDATE WHERE 절에 auth_provider 조건 안 넣음.
-- ⚠️ 닉네임 trim — 앞뒤 공백 처리. Pydantic의 `strip_whitespace=True`로 자동 처리 (NicknameUpdate 모델). 코드에서 추가 처리 불필요.
+- ⚠️ 닉네임 trim — 명세상 trim 요구 없음. NicknameUpdate 모델은 min_length/max_length만 검증 (빈 문자열 = 422). 앞뒤 공백은 보존 (회원이 공백 포함 닉네임 원할 수 있음).
 
 ## 7. 최종 결정
 
