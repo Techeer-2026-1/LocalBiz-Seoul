@@ -144,3 +144,25 @@ plan #15 loader에서 패턴 재사용됨.
 **broadcast**: 모든 macOS 개발 환경 ETL/파일 탐색 plan.
 
 **2026-04-12 RESOLVED** — load_g2_public_cultural.py + load_g3_health_daily.py 양쪽에 적용 완료.
+
+---
+
+## 2026-04-28 — CI plan 단계에서 init_db.sql extension 의존 미검증 (by 메인 Claude, 본 PR(#8) 진행 중 발견)
+
+**맥락**: plan `2026-04-28-ci-postgres-service` 작성 + Metis okay + Momus approved 후 코드 작성 진입. 첫 GitHub Actions 실행 시 발견.
+
+**증상**: "Apply DB migrations" step에서 `psql:scripts/init_db.sql:2: ERROR: extension "postgis" is not available` → exit 3.
+
+**원인**:
+- init_db.sql 첫 5줄에 `CREATE EXTENSION IF NOT EXISTS postgis;` + `pgcrypto;`
+- 본 PR이 사용한 `postgres:16` 공식 이미지에 PostGIS 미포함
+- Metis 갭 분석은 ERD v6.3 §6 users 컬럼만 검증, init_db.sql 본문 의존성 미검증
+- Momus fs 검증도 init_db.sql 존재만 확인, CREATE EXTENSION 라인 미확인
+
+**해결**: `image: postgres:16` → `image: postgis/postgis:16-3.4` (PostGIS + pgcrypto 모두 포함)
+
+**시스템 학습 포인트** (KAIROS 후보):
+- Momus의 fs 검증은 plan에 박힌 SQL 파일 본문 dependency까지 실측해야 함
+- 미래 Momus 룰 추가 권장: "마이그레이션 SQL이 plan에 박혀있으면, 그 SQL이 참조하는 외부 의존성(extension/function/type)을 fs로 실측"
+
+**broadcast 대상**: 미래 CI/Docker 관련 plan 작성자, OpenSearch/Redis 추가 plan, 외부 service 의존성 추가하는 모든 plan.
