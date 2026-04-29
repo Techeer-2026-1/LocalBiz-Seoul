@@ -15,6 +15,8 @@ from typing import Any, Optional
 
 from langgraph.graph import END, StateGraph
 
+from src.graph.booking_node import booking_node  # pyright: ignore[reportMissingImports]
+from src.graph.calendar_node import calendar_node  # pyright: ignore[reportMissingImports]
 from src.graph.general_node import general_node  # pyright: ignore[reportMissingImports]
 from src.graph.intent_router_node import intent_router_node  # pyright: ignore[reportMissingImports]
 from src.graph.response_builder_node import response_builder_node  # pyright: ignore[reportMissingImports]
@@ -64,14 +66,7 @@ async def _detail_inquiry_node(state: AgentState) -> dict[str, Any]:
     return {"response_blocks": []}
 
 
-async def _booking_node(state: AgentState) -> dict[str, Any]:
-    """예약 딥링크 노드 stub."""
-    return {"response_blocks": []}
-
-
-async def _calendar_node(state: AgentState) -> dict[str, Any]:
-    """일정 추가 노드 stub (Google Calendar MCP)."""
-    return {"response_blocks": []}
+# booking_node, calendar_node는 각 *_node.py에서 import (위 import 참조)
 
 
 # ---------------------------------------------------------------------------
@@ -131,8 +126,8 @@ def build_graph(checkpointer: Optional[Any] = None) -> Any:
     graph.add_node("course_plan", _course_plan_node)
     graph.add_node("general", general_node)
     graph.add_node("detail_inquiry", _detail_inquiry_node)
-    graph.add_node("booking", _booking_node)
-    graph.add_node("calendar", _calendar_node)
+    graph.add_node("booking", booking_node)
+    graph.add_node("calendar", calendar_node)
     graph.add_node("response_builder", response_builder_node)
 
     # 엣지 설정
@@ -147,9 +142,11 @@ def build_graph(checkpointer: Optional[Any] = None) -> Any:
             "place_search": "place_search",
             "place_recommend": "place_recommend",
             "event_search": "event_search",
+            "event_recommend": "event_recommend",
             "course_plan": "course_plan",
             "detail_inquiry": "detail_inquiry",
             "booking": "booking",
+            "calendar": "calendar",
             "general": "general",
         },
     )
@@ -159,10 +156,12 @@ def build_graph(checkpointer: Optional[Any] = None) -> Any:
         "place_search",
         "place_recommend",
         "event_search",
+        "event_recommend",
         "course_plan",
         "general",
         "detail_inquiry",
         "booking",
+        "calendar",
     ]:
         graph.add_edge(node_name, "response_builder")
 

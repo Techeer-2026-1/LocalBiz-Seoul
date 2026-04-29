@@ -33,6 +33,10 @@ class Settings(BaseSettings):
     # --- Gemini ---
     gemini_llm_api_key: str = ""
 
+    # --- Google Calendar (calendar_node) ---
+    google_calendar_client_id: str = ""
+    google_calendar_client_secret: str = ""
+
     # --- App ---
     debug: bool = False
     jwt_secret: Optional[str] = None
