@@ -80,6 +80,24 @@ def format_done_event(
 
 
 # ---------------------------------------------------------------------------
+# 노드별 status 메시지 (SSE 제어 이벤트, DB 미저장)
+# ---------------------------------------------------------------------------
+_NODE_STATUS_MESSAGES: dict[str, str] = {
+    "intent_router": "의도를 분석하고 있어요...",
+    "query_preprocessor": "질문을 정리하고 있어요...",
+    "place_search": "장소를 검색하고 있어요...",
+    "place_recommend": "장소를 추천하고 있어요...",
+    "event_search": "행사를 검색하고 있어요...",
+    "event_recommend": "행사를 추천하고 있어요...",
+    "course_plan": "코스를 계획하고 있어요...",
+    "general": "답변을 생성하고 있어요...",
+    "detail_inquiry": "상세 정보를 조회하고 있어요...",
+    "booking": "예약 정보를 확인하고 있어요...",
+    "calendar": "일정을 추가하고 있어요...",
+}
+
+
+# ---------------------------------------------------------------------------
 # DB 헬퍼 — seed user, conversations, messages
 # ---------------------------------------------------------------------------
 async def _ensure_seed_user(pool: Any) -> int:
@@ -222,9 +240,14 @@ async def chat_stream(
                     return
 
                 # event는 {node_name: node_output} 형태
-                for _node_name, node_output in event.items():
+                for node_name, node_output in event.items():
                     if not isinstance(node_output, dict):
                         continue
+
+                    # 노드 전환 시 status 이벤트 전송 (DB 미저장)
+                    status_msg = _NODE_STATUS_MESSAGES.get(node_name)
+                    if status_msg:
+                        yield format_status_event(status_msg, node=node_name)
 
                     blocks = node_output.get("response_blocks", [])
                     for block in blocks:

@@ -145,7 +145,7 @@ SSE → intent_router → query_preprocessor → (조건부 라우팅)
 
 ## 절대 금지
 
-- `.env` 읽기/커밋 (API 키)
+- `.env` 커밋/업로드/외부 전송 금지 (API 키 유출 방지). 읽기는 개발 중 허용. `.env` 수정/생성 시 사용자 승인 필수.
 - `git push --force`, `git reset --hard`, `--no-verify`, `docker-compose down -v` (pre_bash_guard가 차단)
 - append-only 테이블 UPDATE/DELETE
 - f-string SQL / OpenAI 임베딩 / `str | None` 문법 / ORM 도입
