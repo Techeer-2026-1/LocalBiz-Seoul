@@ -3,8 +3,8 @@
 - Phase: P1
 - 요청자: 이정
 - 작성일: 2026-04-29
-- 상태: approved
-- 최종 결정: APPROVED (Metis 002-okay + Momus 003-okay, 2026-04-29)
+- 상태: COMPLETE
+- 최종 결정: APPROVED → COMPLETE (2026-04-29)
 
 ## 1. 요구사항
 
@@ -58,4 +58,4 @@
 
 ## 7. 최종 결정
 
-PENDING (Metis 재검토 필요)
+APPROVED → COMPLETE (Metis 002-okay + Momus 003-okay, 2026-04-29)

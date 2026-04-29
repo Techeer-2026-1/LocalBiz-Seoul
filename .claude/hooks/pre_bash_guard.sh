@@ -17,11 +17,7 @@ input=$(cat)
 python3 - "$input" <<'PY'
 import sys, json, re
 
-try:
-    data = json.loads(sys.argv[1])
-except Exception:
-    sys.exit(0)
-
+data = json.loads(sys.argv[1])
 cmd = data.get("tool_input", {}).get("command", "") or ""
 if not cmd.strip():
     sys.exit(0)
