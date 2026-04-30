@@ -34,6 +34,7 @@ def clear_token_cache(user_id: int) -> None:
     """user_id의 access_token 캐시 무효화. Google 재연동 시 호출."""
     _token_cache.pop(user_id, None)
 
+
 _GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 _GOOGLE_CALENDAR_URL = "https://www.googleapis.com/calendar/v3/calendars/primary/events"
 _KST = timezone(timedelta(hours=9))
