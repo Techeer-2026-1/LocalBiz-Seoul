@@ -15,7 +15,6 @@ from typing import Any, Optional
 
 from langgraph.graph import END, StateGraph
 
-from src.graph.booking_node import booking_node  # pyright: ignore[reportMissingImports]
 from src.graph.calendar_node import calendar_node  # pyright: ignore[reportMissingImports]
 from src.graph.general_node import general_node  # pyright: ignore[reportMissingImports]
 from src.graph.intent_router_node import intent_router_node  # pyright: ignore[reportMissingImports]
@@ -66,7 +65,9 @@ async def _detail_inquiry_node(state: AgentState) -> dict[str, Any]:
     return {"response_blocks": []}
 
 
-# booking_node, calendar_node는 각 *_node.py에서 import (위 import 참조)
+async def _booking_node(state: AgentState) -> dict[str, Any]:
+    """예약 딥링크 노드 (feat/#12에서 구현 예정)."""
+    return {"response_blocks": []}
 
 
 # ---------------------------------------------------------------------------
@@ -126,7 +127,7 @@ def build_graph(checkpointer: Optional[Any] = None) -> Any:
     graph.add_node("course_plan", _course_plan_node)
     graph.add_node("general", general_node)
     graph.add_node("detail_inquiry", _detail_inquiry_node)
-    graph.add_node("booking", booking_node)
+    graph.add_node("booking", _booking_node)
     graph.add_node("calendar", calendar_node)
     graph.add_node("response_builder", response_builder_node)
 

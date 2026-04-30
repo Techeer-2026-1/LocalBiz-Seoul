@@ -62,6 +62,7 @@ _ROUTABLE_INTENTS: frozenset[IntentType] = frozenset(  # pyright: ignore[reportA
         IntentType.COURSE_PLAN,
         IntentType.DETAIL_INQUIRY,
         IntentType.BOOKING,
+        IntentType.CALENDAR,
         IntentType.GENERAL,
     }
 )
