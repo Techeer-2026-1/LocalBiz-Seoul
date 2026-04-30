@@ -38,17 +38,17 @@ intent → status → text_stream → places[] → map_markers → done
 
 ### 임베딩 방식
 
-`langchain_google_genai.GoogleGenerativeAIEmbeddings` 사용 (불변식 #7):
+`httpx.AsyncClient`로 Gemini REST API 직접 호출 (불변식 #7):
 ```python
-embeddings = GoogleGenerativeAIEmbeddings(
-    model="models/gemini-embedding-001",
-    google_api_key=settings.gemini_llm_api_key,
-)
-vector = await embeddings.aembed_query(query)  # 768d 단건
+async def _embed_query_768d(query, api_key):
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.post(url, json=body, headers={"x-goog-api-key": api_key})
+    return resp.json()["embedding"]["values"]  # 768d
 ```
 
 ETL 배치용 `embed_batch_async()`는 aiohttp.ClientSession 의존이라 런타임 노드에 부적합.
-langchain SDK의 `aembed_query()`가 단건 임베딩에 적합.
+langchain `GoogleGenerativeAIEmbeddings`는 `outputDimensionality` 파라미터 미지원 (3072d 반환).
+httpx 직접 호출로 768d 보장 + async non-blocking.
 
 ### OpenSearch k-NN 쿼리
 
@@ -130,7 +130,8 @@ result = await os_client.search(index="places_vector", body=body)
    - 검증: ruff + pyright 통과.
 
 3. `backend/src/graph/response_builder_node.py` — 블록 순서 추가
-   - `_EXPECTED_BLOCK_ORDER["PLACE_SEARCH"] = ["intent", "text_stream", "places", "map_markers", "done"]`
+   - `_EXPECTED_BLOCK_ORDER["PLACE_SEARCH"] = ["intent", "text_stream", "places", "done"]`
+   - `_OPTIONAL_BLOCKS`에 `map_markers` 추가 (좌표 없는 결과에서 생략 가능)
    - 검증: ruff 통과.
 
 4. `backend/tests/test_place_search.py` — 단위 테스트

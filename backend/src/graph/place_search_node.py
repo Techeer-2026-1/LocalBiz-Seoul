@@ -89,9 +89,10 @@ async def _search_pg(
 # ---------------------------------------------------------------------------
 # OpenSearch k-NN 검색
 # ---------------------------------------------------------------------------
-def _embed_query_768d(query: str, api_key: str) -> list[float]:
-    """Gemini embedding-001 768d 단건 임베딩. 불변식 #7."""
-    import urllib.request
+async def _embed_query_768d(query: str, api_key: str) -> list[float]:
+    """Gemini embedding-001 768d 단건 임베딩 (async). 불변식 #7."""
+
+    import httpx  # pyright: ignore[reportMissingImports]
 
     url = "https://generativelanguage.googleapis.com/v1beta/models/gemini-embedding-001:embedContent"
     body = {
@@ -99,18 +100,16 @@ def _embed_query_768d(query: str, api_key: str) -> list[float]:
         "content": {"parts": [{"text": query[:2000]}]},
         "outputDimensionality": 768,
     }
-    import json as _json
+    headers = {
+        "Content-Type": "application/json",
+        "x-goog-api-key": api_key,
+    }
 
-    req = urllib.request.Request(
-        url,
-        data=_json.dumps(body).encode(),
-        headers={
-            "Content-Type": "application/json",
-            "x-goog-api-key": api_key,
-        },
-    )
-    with urllib.request.urlopen(req, timeout=10) as resp:
-        data = _json.loads(resp.read())
+    async with httpx.AsyncClient(timeout=10) as client:
+        resp = await client.post(url, json=body, headers=headers)
+        resp.raise_for_status()
+        data = resp.json()
+
     return data.get("embedding", {}).get("values", [0.0] * 768)
 
 
@@ -121,9 +120,7 @@ async def _search_os(
 ) -> list[dict[str, Any]]:
     """places_vector k-NN HNSW 검색. 쿼리 임베딩 → 유사도 top-K."""
     try:
-        import asyncio
-
-        query_vector = await asyncio.to_thread(_embed_query_768d, query, api_key)
+        query_vector = await _embed_query_768d(query, api_key)
 
         body: dict[str, Any] = {
             "size": _OS_TOP_K,
@@ -288,7 +285,7 @@ async def place_search_node(state: dict[str, Any]) -> dict[str, Any]:
     from src.db.postgres import get_pool  # pyright: ignore[reportMissingImports]
 
     query = state.get("query", "")
-    pq = state.get("processed_query", {})
+    pq = state.get("processed_query") or {}
 
     district = pq.get("district")
     category = pq.get("category")
@@ -298,19 +295,26 @@ async def place_search_node(state: dict[str, Any]) -> dict[str, Any]:
 
     settings = get_settings()
 
-    # PG 검색
-    pool = get_pool()
-    pg_results = await _search_pg(pool, district, category, keywords, neighborhood)
+    import asyncio
 
-    # OS 검색
-    os_results: list[dict[str, Any]] = []
+    # PG + OS 병렬 검색
+    pool = get_pool()
+    pg_task = _search_pg(pool, district, category, keywords, neighborhood)
+
+    os_task: Optional[asyncio.Task[list[dict[str, Any]]]] = None
     if settings.gemini_llm_api_key:
         try:
             os_client = get_os_client()
             search_text = expanded_query or query
-            os_results = await _search_os(os_client, search_text, settings.gemini_llm_api_key)
+            os_task = asyncio.create_task(_search_os(os_client, search_text, settings.gemini_llm_api_key))
         except RuntimeError:
             logger.warning("OpenSearch client not initialized, skipping vector search")
+
+    pg_results = await pg_task
+
+    os_results: list[dict[str, Any]] = []
+    if os_task is not None:
+        os_results = await os_task
 
     # 병합
     results = _merge_results(pg_results, os_results)
