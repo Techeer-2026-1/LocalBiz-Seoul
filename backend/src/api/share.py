@@ -58,6 +58,17 @@ async def create_share_link(
     if req and req.message_range:
         from_msg_id = req.message_range.from_message_id
         to_msg_id = req.message_range.to_message_id
+        # 유효성: 둘 다 null이거나 둘 다 non-null + from <= to
+        if (from_msg_id is None) != (to_msg_id is None):
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="from_message_id와 to_message_id는 둘 다 지정하거나 둘 다 비워야 합니다.",
+            )
+        if from_msg_id is not None and to_msg_id is not None and from_msg_id > to_msg_id:
+            raise HTTPException(
+                status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+                detail="from_message_id는 to_message_id보다 작거나 같아야 합니다.",
+            )
 
     await pool.execute(
         "INSERT INTO shared_links (share_token, thread_id, user_id, from_message_id, to_message_id) "

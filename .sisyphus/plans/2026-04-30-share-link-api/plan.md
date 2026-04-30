@@ -70,8 +70,8 @@ message_range 필터링:
 검증: is_deleted=false AND (expires_at IS NULL OR expires_at > now())
 
 **DELETE /api/v1/chats/{thread_id}/share**
-```
-204 No Content
+```sql
+-- 204 No Content
 UPDATE shared_links SET is_deleted=true, updated_at=now() WHERE thread_id=$1 AND user_id=$2 AND is_deleted=false
 ```
 
@@ -141,8 +141,7 @@ UPDATE shared_links SET is_deleted=true, updated_at=now() WHERE thread_id=$1 AND
 - `./validate.sh` 전체 통과
 - curl 테스트:
   - POST 생성 → share_token 확인
-  - GET /shared/{token} → 인증 없이 messages 확인
-  - GET /shared/{token}?from=1&to=3 → 범위 필터링 확인
+  - GET /shared/{token} → 인증 없이 messages 확인 (범위는 생성 시 저장된 from/to로 필터링)
   - DELETE 해제 → 204
   - 해제 후 GET → 404
 
