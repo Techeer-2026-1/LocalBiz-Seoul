@@ -238,12 +238,12 @@ pre-commit run --all-files  # 로컬 진단
 
 **① GCP Console 설정**
 `console.cloud.google.com` → 사용자 인증 정보 → AnyWay OAuth 클라이언트 ID → 승인된 리디렉션 URI에 추가:
-```
+```text
 https://실제도메인/api/v1/auth/google/calendar/callback
 ```
 
 **② 서버 .env 수정**
-```
+```bash
 GOOGLE_CALENDAR_REDIRECT_URI=https://실제도메인/api/v1/auth/google/calendar/callback
 ```
 

@@ -22,6 +22,7 @@ from fastapi import APIRouter, Depends, HTTPException, Query
 from src.api.deps import get_current_user_id  # pyright: ignore[reportMissingImports]
 from src.config import get_settings  # pyright: ignore[reportMissingImports]
 from src.db.postgres import get_pool  # pyright: ignore[reportMissingImports]
+from src.graph.calendar_node import clear_token_cache  # pyright: ignore[reportMissingImports]
 
 logger = logging.getLogger(__name__)
 
@@ -167,5 +168,6 @@ async def google_calendar_callback(
             refresh_token,
         )
 
+    clear_token_cache(user_id)
     logger.info("google_calendar_callback: user_id=%d calendar OAuth 완료", user_id)
     return {"message": "Google Calendar 연동이 완료되었습니다."}

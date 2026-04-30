@@ -29,6 +29,11 @@ logger = logging.getLogger(__name__)
 # 접근 토큰 캐시 — user_id 기준, 58분 (구글 기본 만료 1시간보다 2분 짧게)
 _token_cache: TTLCache = TTLCache(maxsize=1000, ttl=3480)
 
+
+def clear_token_cache(user_id: int) -> None:
+    """user_id의 access_token 캐시 무효화. Google 재연동 시 호출."""
+    _token_cache.pop(user_id, None)
+
 _GOOGLE_TOKEN_URL = "https://oauth2.googleapis.com/token"
 _GOOGLE_CALENDAR_URL = "https://www.googleapis.com/calendar/v3/calendars/primary/events"
 _KST = timezone(timedelta(hours=9))
@@ -92,6 +97,18 @@ async def calendar_node(state: AgentState) -> dict[str, Any]:
 
     if not start_time:
         return {"response_blocks": [_error_block("언제 시작하는 일정인가요? 예) '5월 2일 오후 2시'")]}
+
+    # ISO 형식 유효성 검증
+    try:
+        datetime.fromisoformat(start_time)
+    except ValueError:
+        return {"response_blocks": [_error_block("언제 시작하는 일정인가요? 예) '5월 2일 오후 2시'")]}
+
+    if end_time:
+        try:
+            datetime.fromisoformat(end_time)
+        except ValueError:
+            end_time = None
 
     # end_time 미입력 시 1시간 자동 추가
     if not end_time:
