@@ -44,6 +44,20 @@ Google 소셜 로그인,사용자,POST,/api/v1/auth/google,,"Request Body:
 
 ※ user_id는 ERD v6.2에서 BIGINT(불변식 #1). JSON은 문자열로 직렬화.
 ※ Google Calendar scope가 기본 요청에 포함되면 refresh_token을 http://users.google_calendar_refresh_token에 저장 (Gap #G4 옵션 A, 사용자 승인 대기).",
+Google Calendar 연동 URL 발급,사용자,GET,/api/v1/auth/google/calendar,,,"Response (200 OK)
+{ ""auth_url"": ""string"" }
+
+• JWT Authorization 헤더 필수.
+• 반환된 auth_url로 사용자를 리다이렉트.
+• state 파라미터는 HMAC-SHA256(jwt_secret)으로 서명, 10분 유효.",강민서
+Google Calendar OAuth 콜백,사용자,GET,/api/v1/auth/google/calendar/callback,"• code: 구글 인증 코드
+• state: HMAC-SHA256 서명된 검증값
+• error: 인증 거부 시 구글이 전달",(구글이 직접 호출 — Request Body 없음),"Response (200 OK)
+{ ""message"": ""Google Calendar 연동이 완료되었습니다."" }
+
+• JWT 없음 (구글이 호출).
+• state 서명 검증 + 10분 만료 확인 → 실패 시 400.
+• user_oauth_tokens 테이블 ON CONFLICT DO UPDATE upsert.",강민서
 비밀번호 변경,사용자,PATCH,/api/v1/users/me/password,,"Request Body:
 { ""old_password"": ""string"",
   ""new_password"": ""string"" }","Response (200 OK)
