@@ -86,6 +86,7 @@ app = FastAPI(
 # 예: chats_router의 GET /api/v1/chats → app.get("/api/v1/chats")로 등록
 from src.api.auth import router as auth_router  # noqa: E402  # pyright: ignore[reportMissingImports]
 from src.api.chats import router as chats_router  # noqa: E402  # pyright: ignore[reportMissingImports]
+from src.api.share import router as share_router  # noqa: E402  # pyright: ignore[reportMissingImports]
 from src.api.sse import router as sse_router  # noqa: E402  # pyright: ignore[reportMissingImports]
 from src.api.users import router as users_router  # noqa: E402  # pyright: ignore[reportMissingImports]
 
@@ -93,6 +94,7 @@ app.include_router(auth_router)  # /api/v1/auth/* 엔드포인트 (회원가입 
 app.include_router(users_router)  # /api/v1/users/* 엔드포인트 (닉네임 변경 등)
 app.include_router(chats_router)  # /api/v1/chats/* 엔드포인트 5개
 app.include_router(sse_router)  # /api/v1/chat/stream SSE 엔드포인트
+app.include_router(share_router)  # 공유 링크 3개
 
 
 @app.get("/health")
