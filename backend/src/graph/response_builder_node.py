@@ -20,9 +20,15 @@ logger = logging.getLogger(__name__)
 # 현재 GENERAL만 확정. 나머지 intent는 각 노드 구현 완료 후 추가.
 # TODO: PLACE_SEARCH, PLACE_RECOMMEND, EVENT_SEARCH, EVENT_RECOMMEND,
 #       COURSE_PLAN, DETAIL_INQUIRY, BOOKING, CALENDAR
+# intent별 기대 블록 순서. 필수 블록만 포함.
+# map_markers 등 선택적 블록은 _OPTIONAL_BLOCKS에서 관리.
 _EXPECTED_BLOCK_ORDER: dict[str, list[str]] = {
     "GENERAL": ["intent", "text_stream", "done"],
+    "PLACE_SEARCH": ["intent", "text_stream", "places", "done"],
 }
+
+# 선택적 블록 — 있어도 되고 없어도 되는 블록 (순서 검증에서 제외)
+_OPTIONAL_BLOCKS: frozenset[str] = frozenset({"map_markers"})
 
 
 # ---------------------------------------------------------------------------
@@ -33,6 +39,8 @@ def _validate_block_order(
     block_types: list[str],
 ) -> Optional[str]:
     """intent별 기대 순서와 실제 블록 type 시퀀스를 비교.
+
+    선택적 블록(map_markers 등)은 제외하고 필수 블록만 검증.
 
     Args:
         intent: 분류된 intent 문자열. None이면 검증 스킵.
@@ -46,11 +54,12 @@ def _validate_block_order(
 
     expected = _EXPECTED_BLOCK_ORDER.get(intent)
     if expected is None:
-        # 아직 순서가 정의되지 않은 intent — 검증 스킵
         return None
 
-    if block_types != expected:
-        return f"블록 순서 불일치 [{intent}]: expected={expected}, actual={block_types}"
+    # 선택적 블록 제외 후 비교
+    actual_required = [t for t in block_types if t not in _OPTIONAL_BLOCKS]
+    if actual_required != expected:
+        return f"블록 순서 불일치 [{intent}]: expected={expected}, actual={actual_required}"
 
     return None
 
