@@ -17,11 +17,7 @@ input=$(cat)
 python3 - "$input" <<'PY'
 import sys, json, re
 
-try:
-    data = json.loads(sys.argv[1])
-except Exception:
-    sys.exit(0)
-
+data = json.loads(sys.argv[1])
 cmd = data.get("tool_input", {}).get("command", "") or ""
 if not cmd.strip():
     sys.exit(0)
@@ -59,6 +55,37 @@ DESTRUCTIVE_CHAIN = [
         '꼭 필요하면 결과를 xargs로 받아 별도 Bash 호출.',
     ),
 ]
+
+# Phase 5 Zero-Trust: gh pr create 시 flag 체크
+if re.search(r'gh\s+pr\s+create', cmd):
+    import os
+    ROOT = os.environ.get("CLAUDE_PROJECT_DIR", os.environ.get("PROJECT_ROOT", "."))
+    flag_path = f"{ROOT}/.sisyphus/state/zero-trust-passed.flag"
+    if not os.path.exists(flag_path):
+        sys.stderr.write("\n[BLOCKED by Phase 5 Zero-Trust]\n\n")
+        sys.stderr.write("  PR 생성 전에 Zero-Trust 검증이 필요합니다.\n")
+        sys.stderr.write("  실행: ./zero-trust.sh\n\n")
+        sys.stderr.write("  Zero-Trust 3단계:\n")
+        sys.stderr.write("    1) validate.sh (정적 검증)\n")
+        sys.stderr.write("    2) 서버 import smoke test\n")
+        sys.stderr.write("    3) 서버 실행 + 헬스체크\n\n")
+        sys.exit(2)
+    else:
+        # flag의 SHA가 현재 HEAD와 일치하는지 확인
+        try:
+            import subprocess
+            head_sha = subprocess.check_output(["git", "rev-parse", "HEAD"], cwd=ROOT).decode().strip()
+            flag_sha = open(flag_path).read().strip()
+            if head_sha != flag_sha:
+                sys.stderr.write("\n[BLOCKED by Phase 5 Zero-Trust]\n\n")
+                sys.stderr.write(f"  Zero-Trust flag SHA ({flag_sha[:8]}...) != HEAD SHA ({head_sha[:8]}...)\n")
+                sys.stderr.write("  검증 후 새 커밋이 추가되었습니다. ./zero-trust.sh 를 다시 실행하세요.\n\n")
+                sys.exit(2)
+        except Exception as e:
+            sys.stderr.write(f"\n[BLOCKED by Phase 5 Zero-Trust]\n\n")
+            sys.stderr.write(f"  SHA 검증 실패: {e}\n")
+            sys.stderr.write("  ./zero-trust.sh 를 다시 실행하세요.\n\n")
+            sys.exit(2)
 
 violations = []
 for pat, msg in LEGACY + DESTRUCTIVE_CHAIN:

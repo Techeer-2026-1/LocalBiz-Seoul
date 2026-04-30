@@ -1,9 +1,8 @@
 """애플리케이션 설정 — 환경변수 로딩 (pydantic-settings).
 
 싱글턴 패턴으로 한 번만 로딩. 환경변수 또는 .env 파일에서 읽음.
-DB_HOST, DB_PORT, DB_NAME, DB_USER, DB_PASSWORD,
-OPENSEARCH_HOST, OPENSEARCH_PORT, OPENSEARCH_USER, OPENSEARCH_PASS,
-GEMINI_LLM_API_KEY.
+DB_*, OPENSEARCH_*, GEMINI_LLM_API_KEY,
+JWT_SECRET, JWT_ALGORITHM, JWT_EXPIRE_MINUTES, GOOGLE_CLIENT_ID.
 """
 
 from __future__ import annotations
@@ -40,7 +39,14 @@ class Settings(BaseSettings):
 
     # --- App ---
     debug: bool = False
+
+    # --- JWT (Auth #4 회원가입 PR 도입) ---
     jwt_secret: Optional[str] = None
+    jwt_algorithm: str = "HS256"
+    jwt_expire_minutes: int = 10080  # 7일 (60*24*7)
+
+    # --- Google OAuth (Auth #5 Google 로그인 PR에서 사용 예정) ---
+    google_client_id: str = ""
 
     model_config = {
         "env_file": ".env",

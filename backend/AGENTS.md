@@ -14,7 +14,7 @@ AI 에이전트(Claude Code, Cursor, Copilot)가 이 레포에서 작업할 때 
 
 ## 절대 안 됨
 
-- `.env` 파일 읽기/수정/커밋 (API 키 포함)
+- `.env` 커밋/업로드/외부 전송 금지 (API 키 유출 방지). 읽기는 개발 중 허용. `.env` 수정/생성 시 사용자 승인 필수.
 - `git push --force`, `git reset --hard`
 - DB 데이터 삭제 (`DROP TABLE`, `DELETE FROM` without WHERE)
 - `docker-compose down -v` (볼륨 삭제)

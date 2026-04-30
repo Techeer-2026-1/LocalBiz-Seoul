@@ -230,7 +230,28 @@ pre-commit run --all-files  # 로컬 진단
 
 ---
 
-## 6. 참고
+## 6. 배포 체크리스트
+
+### Google Calendar OAuth 실배포 시 필수
+
+로컬 개발 환경에서는 `localhost` URI로 동작하지만, 실배포 시 아래 두 가지를 반드시 처리해야 함.
+
+**① GCP Console 설정**
+`console.cloud.google.com` → 사용자 인증 정보 → AnyWay OAuth 클라이언트 ID → 승인된 리디렉션 URI에 추가:
+```
+https://실제도메인/api/v1/auth/google/calendar/callback
+```
+
+**② 서버 .env 수정**
+```
+GOOGLE_CALENDAR_REDIRECT_URI=https://실제도메인/api/v1/auth/google/calendar/callback
+```
+
+코드 수정 없이 이 두 가지만 하면 됨. 로컬용 localhost URI는 그대로 두면 개발 환경에서도 계속 동작함.
+
+---
+
+## 7. 참고
 
 - `README.md` — 6단계 onboarding
 - `CLAUDE.md` — 19 불변식 + 절대 금지
