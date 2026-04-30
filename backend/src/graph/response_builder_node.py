@@ -22,6 +22,7 @@ logger = logging.getLogger(__name__)
 #       COURSE_PLAN, DETAIL_INQUIRY, BOOKING, CALENDAR
 _EXPECTED_BLOCK_ORDER: dict[str, list[str]] = {
     "GENERAL": ["intent", "text_stream", "done"],
+    "PLACE_SEARCH": ["intent", "text_stream", "places", "map_markers", "done"],
 }
 
 
