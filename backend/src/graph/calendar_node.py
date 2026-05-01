@@ -65,6 +65,41 @@ class _CalendarError(Exception):
     """사용자 안내가 필요한 캘린더 오류."""
 
 
+async def _load_history_from_db(thread_id: str) -> list[dict[str, str]]:
+    """messages 테이블에서 최근 대화 이력을 직접 조회. 불변식 #3: SELECT만."""
+    try:
+        rows = await get_pool().fetch(
+            "SELECT role, blocks FROM messages WHERE thread_id = $1 ORDER BY message_id DESC LIMIT 10",
+            thread_id,
+        )
+    except Exception:
+        logger.warning("calendar_node: DB 이력 조회 실패 → 빈 이력으로 진행")
+        return []
+
+    history: list[dict[str, str]] = []
+    for row in reversed(rows):
+        role: str = row["role"]
+        blocks = row["blocks"]
+        if isinstance(blocks, str):
+            try:
+                blocks = json.loads(blocks)
+            except Exception:
+                continue
+        text_parts: list[str] = []
+        for block in blocks if isinstance(blocks, list) else []:
+            if not isinstance(block, dict):
+                continue
+            btype = block.get("type", "")
+            if btype == "text" and role == "user":
+                text_parts.append(block.get("content", ""))
+            elif btype == "text_stream" and role == "assistant":
+                text_parts.append(block.get("content", ""))
+        content = " ".join(t for t in text_parts if t).strip()
+        if content:
+            history.append({"role": role, "content": content})
+    return history
+
+
 async def calendar_node(state: AgentState) -> dict[str, Any]:
     """CALENDAR intent 노드 — Google Calendar 이벤트 생성.
 
@@ -84,6 +119,13 @@ async def calendar_node(state: AgentState) -> dict[str, Any]:
 
     pq: Optional[dict[str, Any]] = state.get("processed_query")
     history: list[dict[str, str]] = state.get("conversation_history") or []
+
+    # sse.py가 conversation_history를 빈 배열로 넘겨도
+    # thread_id로 messages 테이블에서 직접 조회 (불변식 #3: SELECT만)
+    if not history:
+        thread_id: Optional[str] = state.get("thread_id")
+        if thread_id:
+            history = await _load_history_from_db(thread_id)
 
     extracted = await _extract_calendar_fields(pq, history)
 
