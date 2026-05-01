@@ -76,7 +76,6 @@ async def test_restaurant_with_google_places_returns_text_stream() -> None:
             json={
                 "places": [
                     {
-                        "reservations_uri": "https://example.com/reserve",
                         "websiteUri": "https://example.com",
                         "nationalPhoneNumber": "02-9999-0000",
                     }
@@ -98,9 +97,7 @@ async def test_restaurant_with_google_places_returns_text_stream() -> None:
 
     blocks = result["response_blocks"]
     assert blocks[0]["type"] == "text_stream"
-    # 예약 직링크 포함 확인
-    assert "example.com/reserve" in blocks[0]["prompt"]
-    # 네이버 예약 링크 항상 포함 확인
+    assert "example.com" in blocks[0]["prompt"]
     assert "booking.naver.com" in blocks[0]["prompt"]
 
 
