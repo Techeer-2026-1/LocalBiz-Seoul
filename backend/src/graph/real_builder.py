@@ -16,6 +16,7 @@ from typing import Any, Optional
 from langgraph.graph import END, StateGraph
 
 from src.graph.calendar_node import calendar_node  # pyright: ignore[reportMissingImports]
+from src.graph.detail_inquiry_node import detail_inquiry_node  # pyright: ignore[reportMissingImports]  # noqa: F401
 from src.graph.general_node import general_node  # pyright: ignore[reportMissingImports]
 from src.graph.intent_router_node import intent_router_node  # pyright: ignore[reportMissingImports]
 from src.graph.place_search_node import place_search_node  # pyright: ignore[reportMissingImports]  # noqa: F401
@@ -47,11 +48,6 @@ async def _event_recommend_node(state: AgentState) -> dict[str, Any]:
 
 async def _course_plan_node(state: AgentState) -> dict[str, Any]:
     """코스 계획 노드 stub."""
-    return {"response_blocks": []}
-
-
-async def _detail_inquiry_node(state: AgentState) -> dict[str, Any]:
-    """상세 조회 노드 stub."""
     return {"response_blocks": []}
 
 
@@ -116,7 +112,7 @@ def build_graph(checkpointer: Optional[Any] = None) -> Any:
     graph.add_node("event_recommend", _event_recommend_node)
     graph.add_node("course_plan", _course_plan_node)
     graph.add_node("general", general_node)
-    graph.add_node("detail_inquiry", _detail_inquiry_node)
+    graph.add_node("detail_inquiry", detail_inquiry_node)
     graph.add_node("booking", _booking_node)
     graph.add_node("calendar", calendar_node)
     graph.add_node("response_builder", response_builder_node)
