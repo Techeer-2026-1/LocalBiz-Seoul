@@ -129,6 +129,62 @@ async def _extract_query_fields(
         return {}
 
 
+async def _load_history_from_db(thread_id: str) -> list[dict[str, str]]:
+    """messages 테이블에서 최근 대화 이력을 직접 조회해 conversation_history 포맷으로 반환.
+
+    sse.py가 conversation_history를 빈 배열로 넘겨도 이 함수로 자체 조회.
+    최근 5턴(10메시지) 기준. 불변식 #3 준수 (SELECT만).
+
+    Returns:
+        [{"role": "user"/"assistant", "content": "..."}] 리스트. 실패 시 [].
+    """
+    try:
+        from src.db.postgres import get_pool  # pyright: ignore[reportMissingImports]
+
+        pool = get_pool()
+        rows = await pool.fetch(
+            """
+            SELECT role, blocks FROM messages
+            WHERE thread_id = $1
+            ORDER BY message_id DESC
+            LIMIT 10
+            """,
+            thread_id,
+        )
+    except Exception:
+        logger.warning("query_preprocessor: DB 이력 조회 실패 → 빈 이력으로 진행")
+        return []
+
+    history: list[dict[str, str]] = []
+    for row in reversed(rows):  # 오래된 순으로 정렬
+        role: str = row["role"]
+        blocks = row["blocks"]
+        if isinstance(blocks, str):
+            try:
+                blocks = json.loads(blocks)
+            except Exception:
+                continue
+
+        # blocks에서 텍스트 추출
+        # user: type=="text" 블록의 content
+        # assistant: type=="text_stream" 블록의 content (Gemini 스트리밍 결과)
+        text_parts: list[str] = []
+        for block in blocks if isinstance(blocks, list) else []:
+            if not isinstance(block, dict):
+                continue
+            btype = block.get("type", "")
+            if btype == "text" and role == "user":
+                text_parts.append(block.get("content", ""))
+            elif btype == "text_stream" and role == "assistant":
+                text_parts.append(block.get("content", ""))
+
+        content = " ".join(t for t in text_parts if t).strip()
+        if content:
+            history.append({"role": role, "content": content})
+
+    return history
+
+
 async def query_preprocessor_node(state: dict[str, Any]) -> dict[str, Any]:
     """LangGraph 공통 쿼리 전처리 노드 (불변식 #12).
 
@@ -140,7 +196,13 @@ async def query_preprocessor_node(state: dict[str, Any]) -> dict[str, Any]:
     """
     query = state.get("query", "")
     intent = state.get("intent")
-    conversation_history = state.get("conversation_history")
+    thread_id: Optional[str] = state.get("thread_id")
+
+    # sse.py가 conversation_history를 채워줬으면 그걸 쓰고,
+    # 비어 있으면 messages 테이블에서 직접 조회
+    conversation_history: Optional[list[dict[str, str]]] = state.get("conversation_history")
+    if not conversation_history and thread_id:
+        conversation_history = await _load_history_from_db(thread_id)
 
     processed = await _extract_query_fields(query, intent, conversation_history)
 
