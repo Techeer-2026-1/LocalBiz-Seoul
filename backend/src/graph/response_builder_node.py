@@ -25,6 +25,7 @@ logger = logging.getLogger(__name__)
 _EXPECTED_BLOCK_ORDER: dict[str, list[str]] = {
     "GENERAL": ["intent", "text_stream", "done"],
     "PLACE_SEARCH": ["intent", "text_stream", "places", "done"],
+    "DETAIL_INQUIRY": ["intent", "text_stream", "place", "done"],
 }
 
 # 선택적 블록 — 있어도 되고 없어도 되는 블록 (순서 검증에서 제외)
