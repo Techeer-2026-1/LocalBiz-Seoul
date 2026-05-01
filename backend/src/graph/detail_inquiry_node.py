@@ -44,8 +44,8 @@ _DETAIL_SQL = (
 # 검색어 추출
 # ---------------------------------------------------------------------------
 def _escape_like(term: str) -> str:
-    """ILIKE 와일드카드 문자(%,_)를 이스케이프."""
-    return term.replace("%", "\\%").replace("_", "\\_")
+    """ILIKE 와일드카드 문자(%,_)를 이스케이프. 백슬래시 우선."""
+    return term.replace("\\", "\\\\").replace("%", "\\%").replace("_", "\\_")
 
 
 def _extract_search_term(
@@ -58,16 +58,16 @@ def _extract_search_term(
     DETAIL_INQUIRY는 특정 장소명 매칭이 목적이므로 keywords(장소명)를 우선.
     """
     keywords: list[str] = processed_query.get("keywords", [])
-    if keywords:
-        return keywords[0]
+    if keywords and keywords[0].strip():
+        return keywords[0].strip()
 
     expanded: Optional[str] = processed_query.get("expanded_query")
-    if expanded:
-        return expanded
+    if expanded and expanded.strip():
+        return expanded.strip()
 
     neighborhood: Optional[str] = processed_query.get("neighborhood")
-    if neighborhood:
-        return neighborhood
+    if neighborhood and neighborhood.strip():
+        return neighborhood.strip()
 
     return fallback_query
 
@@ -188,6 +188,10 @@ async def detail_inquiry_node(state: dict[str, Any]) -> dict[str, Any]:
     pq = state.get("processed_query") or {}
 
     search_term = _extract_search_term(pq, query)
+
+    if not search_term.strip():
+        blocks = _build_detail_blocks(query, None)
+        return {"response_blocks": blocks}
 
     pool = get_pool()
     place_row = await _fetch_place(pool, search_term)

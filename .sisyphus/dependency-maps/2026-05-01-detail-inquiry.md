@@ -5,7 +5,7 @@ plan: `.sisyphus/plans/2026-05-01-detail-inquiry/plan.md`
 
 ## 파일 의존성 그래프
 
-```
+```text
 detail_inquiry_node.py (신규)
   ├── imports: src.config.get_settings
   ├── imports: src.db.postgres.get_pool
