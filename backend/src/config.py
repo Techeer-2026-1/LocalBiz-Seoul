@@ -32,6 +32,11 @@ class Settings(BaseSettings):
     # --- Gemini ---
     gemini_llm_api_key: str = ""
 
+    # --- Google Calendar (calendar_node + OAuth) ---
+    google_calendar_client_id: str = ""
+    google_calendar_client_secret: str = ""
+    google_calendar_redirect_uri: str = "http://localhost:8000/api/v1/auth/google/calendar/callback"
+
     # --- App ---
     debug: bool = False
 
