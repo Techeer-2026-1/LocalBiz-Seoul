@@ -193,11 +193,12 @@ class CalendarBlock(BaseModel):
     """Google Calendar 이벤트 생성 결과."""
 
     type: str = "calendar"
-    title: Optional[str] = None
-    start_time: Optional[str] = None  # ISO 8601
+    event_title: Optional[str] = None  # API 명세서 필드명 일치 (title → event_title)
+    start_time: Optional[str] = None  # ISO 8601 + KST 오프셋
     end_time: Optional[str] = None
     location: Optional[str] = None
-    calendar_link: Optional[str] = None  # 딥링크
+    calendar_link: Optional[str] = None
+    status: Optional[str] = None  # "created" | "failed"
 
 
 # ---------------------------------------------------------------------------
