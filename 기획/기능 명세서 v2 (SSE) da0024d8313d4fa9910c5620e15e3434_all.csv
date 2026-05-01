@@ -1,0 +1,44 @@
+﻿주 기능,Phase,구분,구현,담당자,비고,상세 구현,상세 기능,진행 여부
+대화: 쿼리 전처리,Phase 1,대화,사용자 쏼리 확장/수정 (모든 검색 기능 공통),이정,,Intent Router 직후에 공통으로 실행. Gemini JSON mode,,시작 전
+장소 검색,Phase 1,장소,SQL + Vector k-NN 하이브리드 검색,이정,v2: places_vector 535K 적재 완료,Text-to-SQL(PG+PostGIS) + places_vector k-NN(OS 768d) 병합 검색,,시작 전
+대화 스트리밍,Phase 1,대화,토큰 단위 실시간 전송,이정,,FastAPI SSE (StreamingResponse) → event: text_stream 이벤트로 LLM 응답 토큰 단위 전송. @microsoft/fetch-event-source로 JWT Bearer 인증 유지,,시작 전
+장소 추천,Phase 1,장소,SQL + Vector k-NN + LLM Rerank 3단계,이정,v2: place_analysis 리랭킹 → LLM Rerank으로 전환,PostGIS ST_DWithin + Google Places 병렬 → LLM Rerank(Gemini Flash) → 상위 N건,,시작 전
+행사 검색: 정형 검색,Phase 1,행사,DB 우선 검색 → 부족 시 Naver fallback,한정수,,1차: Cloud SQL events + OS events_vector 검색 → 부족 시 2차: Naver 병렬 → Gemini JSON mode 구조화,,시작 전
+대화: 세션 유지,Phase 1,대화,LLM 컨텍스트 복원 + 전체 대화 이력 영속 저장,이정,,"1) langgraph-checkpoint-postgres: LLM 컨텍스트 복원용
+2) messages 테이블: 전체 대화 원본 append-only 저장",,시작 전
+대화: 의도 분류,Phase 1,대화,자연어 → 13개 Intent 자동 분류,이정,,,사용자가 메시지를 입력하면 AI가 자동으로 의도를 판별하여 적절한 기능을 실행,시작 전
+장소 추천: 사유 표시,Phase 1,장소,리뷰 수집 + text_stream 추천 이유,이정,,Naver Blog + Google Reviews 병렬 수집 → 키워드 리랭킹 → 장소별 추천 이유 + 블로그 pill 링크,,시작 전
+대화: 대화 창에 요청 구분 표시,Phase 1,대화,16종 블록 타입 프론트 렌더링,이정,,16종 콘텐츠 블록: intent/text/text_stream/place/places/events/course/map_markers/map_route/chart/calendar/references/analysis_sources/disambiguation/done/error. SSE 제어 이벤트(messages 미저장): status/done_partial.,,시작 전
+대화: 대화 이력 관리,Phase 1,대화,GET /api/v1/chats,이정,,conversations 테이블에서 user_id로 thread 목록을 최신순으로 반환,,시작 전
+리뷰 비교,Phase 1,리뷰,6지표 런타임 Gemini 채점 + 레이더차트,정조셉,,,,시작 전
+행사 검색: 비정형 검색,Phase 1,행사,Naver 병렬 검색 → Gemini 구조화,한정수,,,,시작 전
+일정 추가,Phase 1,일정 추가,Google Calendar MCP,강민서,,,,시작 전
+중첩된 요청 대응,Phase 1,대화,복수 intent 순차 실행,이정,,,,시작 전
+비용 견적,Phase 1,비용,3단계 가격 추정,정조셉,,,,시작 전
+코스 추천,Phase 1,코스,카테고리별 병렬 검색 → ST_DWithin → Greedy NN → OSRM,이정,,,,시작 전
+예약 연동,Phase 1,예약,딥링크 제공,강민서,,,,시작 전
+이미지 검색: 주인공 판단 쏼리,Phase 1,이미지 검색,OCR 복수 텍스트 시 주인공 판단,강민서,,,,시작 전
+북마크 생성,Phase 1,북마크,5종 프리셋 핀 (place/event/course/analysis/general),강민서,,,,시작 전
+이미지 검색 (OCR),Phase 1,이미지 검색,Gemini Vision OCR → 장소 식별,강민서,,,,시작 전
+모니터링,ETL,대화,Grafana+Prometheus+Loki+Jaeger → Slack,이정,,,,시작 전
+회원가입/로그인,Phase 1,회원가입 / 로그인,이메일+비밀번호 + Google OAuth,한정수,,,,시작 전
+혼잡도 분석,Phase 1,혼잡도 분석,population_stats 기반 혼잡도,정조셉,,,,시작 전
+리뷰 배치 분석,ETL,장소 분석,Naver Blog → Gemini 6지표 → OS place_reviews,이정,,,,완료
+단일 장소 분석,Phase 1,장소 분석,런타임 Gemini 6지표 채점 (place_analysis DROP),이정,,,,시작 전
+북마크 위치로 이동,Phase 1,북마크,message_id 위치로 FE 스크롤 이동,강민서,,,,시작 전
+이미지 검색: 간판 없을 시 추천 장소 후보 표시,Phase 1,이미지 검색,이미지 유사도 기반 추천,강민서,,,,시작 전
+대화: 에러 처리,Phase 1,대화,에러 처리 / 재시도,이정,,"SSE 스트림 끊김 시 브라우저 자동 재연결 (Last-Event-ID). API 실패/LLM 타임아웃 시 event: error 이벤트 전송. retryable=true이면 ""다시 시도"" 버튼 표시",,시작 전
+대화: 대화 삭제,Phase 1,대화,DELETE /api/v1/chats/{thread_id},이정,,ON DELETE CASCADE로 messages + langgraph_checkpoints + bookmarks 자동 삭제,,시작 전
+대화별 북마크 필터,Phase 1,북마크,thread_id로 필터링,강민서,,,,시작 전
+대화: 응답 중단,Phase 1,대화,응답 중단 (Interrupt),이정,,ESC 키 또는 중단 버튼 클릭 시 FE가 AbortController.abort() / EventSource.close() 호출 → 서버가 http://request.is_disconnected()로 감지 → LangGraph 실행 중단,,시작 전
+북마크 삭제,Phase 1,북마크,DELETE /api/v1/users/me/bookmarks/{id},강민서,,,,시작 전
+전체 북마크 목록,Phase 1,북마크,GET /api/v1/users/me/bookmarks,강민서,,,,시작 전
+대화: 새 대화 시작,Phase 1,대화,새 thread_id 생성 + 빈 채팅창,이정,,,,시작 전
+대화: 타임스탬프,Phase 1,대화,메시지 타임스탬프,이정,,,,시작 전
+대화: 응답 재생성,Phase 1,대화,응답 재생성 (Retry),이정,,"""다시 생성"" 버튼 클릭 시 마지막 assistant 메시지를 삭제하고 동일 query로 새 SSE 스트림 재요청. LLM의 비결정적 특성으로 다른 결과 생성",,시작 전
+대화: 처리 상태 표시,Phase 1,대화,처리 상태 표시,이정,,LangGraph 노드 전환 시마다 SSE로 event: status 이벤트 전송. text_stream 시작 시 로딩 해제,,시작 전
+대화: 제목 자동생성/수정,Phase 1,대화,대화 제목 자동 생성 + 수정,이정,,첫 사용자 쿼리 + AI 응답 완료 후 LLM이 대화 요약 제목 생성 → conversations.title에 저장. PATCH /api/v1/chats/{thread_id}로 직접 수정 가능,,시작 전
+대화: 공유,Phase 1,대화,대화 공유,이정,,공유 버튼 클릭 시 share_token 생성 → /shared/{share_token} GET으로 인증 없이 읽기 전용 열람,,시작 전
+프로필 수정 / 로그아웃,Phase 1,회원가입 / 로그인,프로필 수정 + 로그아웃,한정수,,닉네임 변경: PATCH /api/v1/users/me. 비밀번호 변경: PATCH /api/v1/users/me/password. 로그아웃: FE에서 JWT 토큰 삭제 + SSE 스트림 종료,,시작 전
+대화: AI 피드백,Phase 1,대화,AI 응답 피드백,정조셉,,"AI 응답 하단에 피드백 버튼 표시. 클릭 시 feedback 테이블에 (user_id, thread_id, message_id, rating, comment) 저장. append-only.",,시작 전
+행사 추천,Phase 1,행사,LangGraph event_recommend 노드. events + events_vector k-NN + LLM Rerank,한정수,,SSE 이벤트 순서: intent → status → text_stream → events[] → references → done. PLACE_RECOMMEND 패턴 대칭.,,시작 전

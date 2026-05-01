@@ -90,10 +90,12 @@ master_files = [
     "기획/AGENTS.md",
 ]
 # 기능/API 명세서는 노션 DB가 source of truth (CSV export는 보조)
-import glob as _glob
-if not _glob.glob("기획/기능 명세서 *.csv"):
+# macOS NFD 유니코드 정규화 대응: glob 대신 os.listdir + NFC 비교
+import unicodedata as _ud
+_plan_files = [_ud.normalize("NFC", f) for f in os.listdir("기획")]
+if not any(f.startswith("기능 명세서") and f.endswith(".csv") for f in _plan_files):
     errors.append("기획 권위 문서 누락: 기획/기능 명세서 *.csv")
-if not _glob.glob("기획/API 명세서 *.csv"):
+if not any(f.startswith("API 명세서") and f.endswith(".csv") for f in _plan_files):
     errors.append("기획 권위 문서 누락: 기획/API 명세서 *.csv")
 for m in master_files:
     if not os.path.exists(m):

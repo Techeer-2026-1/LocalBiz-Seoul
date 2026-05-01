@@ -72,37 +72,39 @@ async def booking_node(state: AgentState) -> dict[str, Any]:
     pq: Optional[dict[str, Any]] = state.get("processed_query")
 
     # ── 입력 검증 ──────────────────────────────────────────────────────────
-    # place_id 없음 = 대화 담당 팀원의 disambiguation이 아직 완료되지 않은 상태
-    if not pq or not pq.get("place_id"):
-        logger.warning("booking_node: place_id 없음")
-        return {"response_blocks": [_error_block("예약할 장소를 특정할 수 없습니다. 장소를 먼저 선택해 주세요.")]}
+    if not pq:
+        logger.warning("booking_node: processed_query 없음")
+        return {"response_blocks": [_error_block("예약할 장소를 알 수 없습니다. 장소 이름을 포함해 말씀해 주세요.")]}
 
     place_name: str = pq.get("place_name", "").strip()
     if not place_name:
         logger.warning("booking_node: place_name 없음")
-        return {"response_blocks": [_error_block("장소 이름을 확인할 수 없습니다.")]}
+        return {"response_blocks": [_error_block("예약할 장소 이름을 알려주세요. 예) '스타벅스 강남 예약해줘'")]}
 
-    place_id: str = pq["place_id"]
+    place_id: Optional[str] = pq.get("place_id")
+    category: str = "unknown"
+    phone: Optional[str] = None
 
-    # ── 캐시 히트 ──────────────────────────────────────────────────────────
-    # 같은 place_id로 재요청 시 DB/외부 API 재호출 없이 즉시 반환
-    if place_id in _places_cache:
-        logger.info("booking_node: cache hit place_id=%s", place_id)
-        return {"response_blocks": [_text_stream_block(_places_cache[place_id])]}
+    # ── place_id 있으면 캐시/DB 조회 ──────────────────────────────────────
+    if place_id:
+        if place_id in _places_cache:
+            logger.info("booking_node: cache hit place_id=%s", place_id)
+            return {"response_blocks": [_text_stream_block(_places_cache[place_id])]}
 
-    # ── DB 조회 (불변식 #8: asyncpg $1 바인딩) ─────────────────────────────
-    # places 테이블에서 카테고리와 전화번호만 읽어옴 (읽기 전용, append-only 아님)
-    pool = get_pool()
-    async with pool.acquire() as conn:
-        row = await conn.fetchrow(
-            "SELECT category, phone FROM places WHERE place_id = $1",
-            place_id,
-        )
-
-    category: str = (row["category"] if row else "") or "unknown"
-    phone: Optional[str] = row["phone"] if row else None
-
-    logger.info("booking_node: place_id=%s category=%s", place_id, category)
+        # places 테이블에서 카테고리와 전화번호 조회 (불변식 #8: asyncpg $1 바인딩)
+        pool = get_pool()
+        async with pool.acquire() as conn:
+            row = await conn.fetchrow(
+                "SELECT category, phone FROM places WHERE place_id = $1",
+                place_id,
+            )
+        category = (row["category"] if row else "") or "unknown"
+        phone = row["phone"] if row else None
+        logger.info("booking_node: place_id=%s category=%s", place_id, category)
+    else:
+        # place_id 없으면 processed_query의 category 사용
+        category = pq.get("category", "") or "unknown"
+        logger.info("booking_node: place_name=%s category=%s (no place_id)", place_name, category)
 
     # ── 카테고리별 딥링크 생성 ────────────────────────────────────────────
     try:
@@ -111,8 +113,9 @@ async def booking_node(state: AgentState) -> dict[str, Any]:
         # 숙박 날짜 누락 등 — 캐시에 저장하지 않고 error 블록 반환
         return {"response_blocks": [_error_block(str(e))]}
 
-    # ── 캐시 저장 후 반환 ─────────────────────────────────────────────────
-    _places_cache[place_id] = links_text
+    # ── 캐시 저장 후 반환 (place_id 있을 때만) ───────────────────────────
+    if place_id:
+        _places_cache[place_id] = links_text
     return {"response_blocks": [_text_stream_block(links_text)]}
 
 

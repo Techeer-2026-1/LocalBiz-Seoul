@@ -45,14 +45,14 @@ def _make_pool_mock(category: str = "음식점", phone: str = "02-1234-5678") ->
 # 테스트
 # ---------------------------------------------------------------------------
 @pytest.mark.asyncio
-async def test_missing_place_id_returns_error() -> None:
-    """place_id 없으면 error 블록 반환."""
+async def test_place_name_only_returns_text_stream() -> None:
+    """place_id 없이 place_name만 있어도 text_stream 블록 반환 (fallback 동작)."""
     state = {"processed_query": {"place_name": "스타벅스 강남"}}
     result = await booking_node(state)  # type: ignore[arg-type]
 
     blocks = result["response_blocks"]
     assert len(blocks) == 1
-    assert blocks[0]["type"] == "error"
+    assert blocks[0]["type"] == "text_stream"
 
 
 @pytest.mark.asyncio
