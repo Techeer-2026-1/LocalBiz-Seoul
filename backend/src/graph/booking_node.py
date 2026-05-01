@@ -155,9 +155,8 @@ async def _build_restaurant_links(place_name: str, db_phone: Optional[str]) -> s
     """음식점/카페/주점 — Google Places API 조회 후 딥링크 생성.
 
     Google Places API 필드 우선순위:
-      1. reservations_uri — 예약 직링크 (있으면 최우선)
-      2. websiteUri — 공식 홈페이지
-      3. nationalPhoneNumber — 전화번호
+      1. websiteUri — 공식 홈페이지
+      2. nationalPhoneNumber — 전화번호
 
     API 실패 / 키 없음 → 에러 전파 없이 URL 패턴 fallback.
     """
@@ -165,7 +164,6 @@ async def _build_restaurant_links(place_name: str, db_phone: Optional[str]) -> s
     # 한글 장소명을 URL에 안전하게 인코딩 (예: "롯데호텔" → "%EB%A1%AF%EB%8D%B0%ED%98%B8%ED%85%94")
     encoded = quote(place_name, safe="")
 
-    reservation_uri: Optional[str] = None
     website_uri: Optional[str] = None
     google_phone: Optional[str] = None
 
@@ -178,7 +176,7 @@ async def _build_restaurant_links(place_name: str, db_phone: Optional[str]) -> s
                     headers={
                         "X-Goog-Api-Key": settings.google_places_api_key,
                         # FieldMask: 필요한 필드만 요청해서 비용 절감
-                        "X-Goog-FieldMask": ("places.reservations_uri,places.websiteUri,places.nationalPhoneNumber"),
+                        "X-Goog-FieldMask": "places.websiteUri,places.nationalPhoneNumber",
                     },
                     json={"textQuery": place_name, "languageCode": "ko"},
                 )
@@ -186,7 +184,6 @@ async def _build_restaurant_links(place_name: str, db_phone: Optional[str]) -> s
                 places = resp.json().get("places", [])
                 if places:
                     p = places[0]
-                    reservation_uri = p.get("reservations_uri")
                     website_uri = p.get("websiteUri")
                     google_phone = p.get("nationalPhoneNumber")
         except Exception:
@@ -196,9 +193,6 @@ async def _build_restaurant_links(place_name: str, db_phone: Optional[str]) -> s
     phone = google_phone or db_phone
     lines = ["📍 **예약하기**\n"]
 
-    # 예약 직링크가 있으면 최우선 노출
-    if reservation_uri:
-        lines.append(f"✅ [바로 예약하기]({reservation_uri})")
     if website_uri:
         lines.append(f"🌐 [공식 홈페이지]({website_uri})")
 
