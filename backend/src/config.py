@@ -48,6 +48,14 @@ class Settings(BaseSettings):
     # --- Google OAuth (Auth #5 Google 로그인 PR에서 사용 예정) ---
     google_client_id: str = ""
 
+    # --- External APIs (booking_node) ---
+    # Google Places Text Search v1 — 음식점/카페/주점 예약 URL 조회
+    google_places_api_key: str = ""
+    # 서울시 공공서비스예약 API — P1은 URL 패턴만, 실제 API 연동은 후속 plan
+    seoul_public_api_key: str = ""
+    # KOPIS (공연예술통합전산망) API — P1은 URL 패턴만, 실제 API 연동은 후속 plan
+    kopis_api_key: str = ""
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",

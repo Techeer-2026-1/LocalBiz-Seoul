@@ -21,6 +21,7 @@ _SKIP_INTENTS: frozenset[str] = frozenset({"GENERAL"})
 _PREPROCESS_SYSTEM_PROMPT = """\
 You are a query preprocessor for a Seoul local-life AI chatbot.
 Extract structured information from the user's query in Korean.
+If conversation history is provided, use it to resolve references like "여기", "거기", "그곳" and to extract missing information (e.g. dates mentioned in a previous turn).
 
 Return a JSON object with these fields:
 - "original_query": the original user query (string)
@@ -31,13 +32,19 @@ Return a JSON object with these fields:
 - "neighborhood": neighborhood or area name if mentioned, null otherwise (string or null)
   Examples: "홍대", "이태원", "성수동", "강남역"
 - "category": place/event category if mentioned, null otherwise (string or null)
-  Examples: "카페", "음식점", "전시회", "축제", "맛집"
+  Examples: "카페", "음식점", "전시회", "축제", "맛집", "숙박", "호텔", "모텔"
 - "keywords": list of key descriptive words (array of strings)
   Examples: ["분위기 좋은", "조용한"], ["가성비"], ["데이트"]
 - "date_reference": date reference if mentioned, null otherwise (string or null)
   Examples: "이번 주말", "토요일", "내일", "3월"
 - "time_reference": time reference if mentioned, null otherwise (string or null)
   Examples: "2시", "저녁", "오후"
+- "place_name": specific place name if mentioned in current query or conversation history, null otherwise (string or null)
+  Examples: "스타벅스 강남점", "롯데호텔 서울", "한강공원", "A모텔"
+- "check_in": check-in date for accommodation if mentioned in current query or conversation history, null otherwise (string or null)
+  Format: "YYYY-MM-DD" if exact date, otherwise the raw expression. Examples: "2026-05-10", "5월 10일"
+- "check_out": check-out date for accommodation if mentioned in current query or conversation history, null otherwise (string or null)
+  Format: "YYYY-MM-DD" if exact date, otherwise the raw expression. Examples: "2026-05-12", "5월 12일"
 
 Always respond with valid JSON only. No markdown, no explanation.
 """
@@ -46,12 +53,14 @@ Always respond with valid JSON only. No markdown, no explanation.
 async def _extract_query_fields(
     query: str,
     intent: Optional[str] = None,
+    conversation_history: Optional[list[dict[str, str]]] = None,
 ) -> dict[str, Any]:
     """Gemini JSON mode로 쿼리에서 공통 필드 추출.
 
     Args:
         query: 사용자 원본 쿼리.
         intent: 분류된 intent (GENERAL이면 생략).
+        conversation_history: 이전 대화 이력 (place_name/날짜 등 문맥 파싱용).
 
     Returns:
         공통 필드 dict. 실패 시 빈 dict.
@@ -77,8 +86,17 @@ async def _extract_query_fields(
 
         messages: list[tuple[str, str]] = [
             ("system", _PREPROCESS_SYSTEM_PROMPT),
-            ("human", query),
         ]
+
+        # 최근 5턴 대화 이력 포함 — place_name/날짜 문맥 파싱에 활용
+        if conversation_history:
+            for msg in conversation_history[-5:]:
+                role = msg.get("role", "user")
+                content = msg.get("content", "")
+                lc_role = "human" if role == "user" else "ai"
+                messages.append((lc_role, content))
+
+        messages.append(("human", query))
 
         response = await llm.ainvoke(messages)
         text = str(response.content).strip()
@@ -111,6 +129,62 @@ async def _extract_query_fields(
         return {}
 
 
+async def _load_history_from_db(thread_id: str) -> list[dict[str, str]]:
+    """messages 테이블에서 최근 대화 이력을 직접 조회해 conversation_history 포맷으로 반환.
+
+    sse.py가 conversation_history를 빈 배열로 넘겨도 이 함수로 자체 조회.
+    최근 5턴(10메시지) 기준. 불변식 #3 준수 (SELECT만).
+
+    Returns:
+        [{"role": "user"/"assistant", "content": "..."}] 리스트. 실패 시 [].
+    """
+    try:
+        from src.db.postgres import get_pool  # pyright: ignore[reportMissingImports]
+
+        pool = get_pool()
+        rows = await pool.fetch(
+            """
+            SELECT role, blocks FROM messages
+            WHERE thread_id = $1
+            ORDER BY message_id DESC
+            LIMIT 10
+            """,
+            thread_id,
+        )
+    except Exception:
+        logger.warning("query_preprocessor: DB 이력 조회 실패 → 빈 이력으로 진행")
+        return []
+
+    history: list[dict[str, str]] = []
+    for row in reversed(rows):  # 오래된 순으로 정렬
+        role: str = row["role"]
+        blocks = row["blocks"]
+        if isinstance(blocks, str):
+            try:
+                blocks = json.loads(blocks)
+            except Exception:
+                continue
+
+        # blocks에서 텍스트 추출
+        # user: type=="text" 블록의 content
+        # assistant: type=="text_stream" 블록의 content (Gemini 스트리밍 결과)
+        text_parts: list[str] = []
+        for block in blocks if isinstance(blocks, list) else []:
+            if not isinstance(block, dict):
+                continue
+            btype = block.get("type", "")
+            if btype == "text" and role == "user":
+                text_parts.append(block.get("content", ""))
+            elif btype == "text_stream" and role == "assistant":
+                text_parts.append(block.get("content", ""))
+
+        content = " ".join(t for t in text_parts if t).strip()
+        if content:
+            history.append({"role": role, "content": content})
+
+    return history
+
+
 async def query_preprocessor_node(state: dict[str, Any]) -> dict[str, Any]:
     """LangGraph 공통 쿼리 전처리 노드 (불변식 #12).
 
@@ -122,7 +196,14 @@ async def query_preprocessor_node(state: dict[str, Any]) -> dict[str, Any]:
     """
     query = state.get("query", "")
     intent = state.get("intent")
+    thread_id: Optional[str] = state.get("thread_id")
 
-    processed = await _extract_query_fields(query, intent)
+    # sse.py가 conversation_history를 채워줬으면 그걸 쓰고,
+    # 비어 있으면 messages 테이블에서 직접 조회
+    conversation_history: Optional[list[dict[str, str]]] = state.get("conversation_history")
+    if not conversation_history and thread_id:
+        conversation_history = await _load_history_from_db(thread_id)
+
+    processed = await _extract_query_fields(query, intent, conversation_history)
 
     return {"processed_query": processed}
