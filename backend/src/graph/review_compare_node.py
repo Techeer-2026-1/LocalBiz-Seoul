@@ -48,7 +48,7 @@ async def _fetch_places_pg(
     results: list[dict[str, Any]] = []
     for name in names:
         rows = await pool.fetch(
-            "SELECT place_id, name, category, district FROM places WHERE is_deleted = false AND name ILIKE $1 LIMIT 10",
+            "SELECT place_id, name, category, district FROM places WHERE is_deleted = false AND name ILIKE $1",
             f"%{name}%",
         )
         if not rows:
