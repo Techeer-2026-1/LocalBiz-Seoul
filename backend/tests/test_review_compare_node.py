@@ -196,8 +196,9 @@ async def test_review_compare_node_one_place_not_found() -> None:
     mock_pool.fetch = AsyncMock(side_effect=fetch_results)
     mock_os = MagicMock()
 
-    with patch("src.db.postgres.get_pool", return_value=mock_pool), patch(
-        "src.db.opensearch.get_os_client", return_value=mock_os
+    with (
+        patch("src.db.postgres.get_pool", return_value=mock_pool),
+        patch("src.db.opensearch.get_os_client", return_value=mock_os),
     ):
         state: dict[str, Any] = {
             "query": "맥도날드장안 vs 없는장소 비교",
@@ -222,8 +223,9 @@ async def test_review_compare_node_no_places_found() -> None:
     mock_pool.fetch = AsyncMock(return_value=[])
     mock_os = MagicMock()
 
-    with patch("src.db.postgres.get_pool", return_value=mock_pool), patch(
-        "src.db.opensearch.get_os_client", return_value=mock_os
+    with (
+        patch("src.db.postgres.get_pool", return_value=mock_pool),
+        patch("src.db.opensearch.get_os_client", return_value=mock_os),
     ):
         state: dict[str, Any] = {
             "query": "없는장소A vs 없는장소B 비교",
