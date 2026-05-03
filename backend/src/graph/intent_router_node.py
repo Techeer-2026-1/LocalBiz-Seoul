@@ -26,7 +26,7 @@ class IntentType(StrEnum):  # pyright: ignore[reportAttributeAccessIssue]
     BOOKING = "BOOKING"
     CALENDAR = "CALENDAR"
     FAVORITE = "FAVORITE"
-    # Phase 2
+    # Phase 1 (기획서 v2 SSE L155)
     REVIEW_COMPARE = "REVIEW_COMPARE"
     ANALYSIS = "ANALYSIS"
     COST_ESTIMATE = "COST_ESTIMATE"
@@ -48,6 +48,7 @@ PHASE1_INTENTS: frozenset[IntentType] = frozenset(  # pyright: ignore[reportAssi
         IntentType.BOOKING,
         IntentType.CALENDAR,
         IntentType.FAVORITE,
+        IntentType.REVIEW_COMPARE,
         IntentType.GENERAL,
     }
 )
@@ -64,6 +65,7 @@ _ROUTABLE_INTENTS: frozenset[IntentType] = frozenset(  # pyright: ignore[reportA
         IntentType.DETAIL_INQUIRY,
         IntentType.BOOKING,
         IntentType.CALENDAR,
+        IntentType.REVIEW_COMPARE,
         IntentType.GENERAL,
     }
 )
@@ -86,10 +88,11 @@ Phase 1 (active):
 - BOOKING: requesting a reservation or booking link
 - CALENDAR: adding an event to calendar
 - FAVORITE: bookmarking or favoriting something
+- REVIEW_COMPARE: comparing two or more places by 6 metrics (satisfaction/accessibility/cleanliness/value/atmosphere/expertise)
 - GENERAL: general conversation, greetings, or anything else
 
 Phase 2 (not yet active, classify as GENERAL for now):
-- REVIEW_COMPARE, ANALYSIS, COST_ESTIMATE, CROWDEDNESS, IMAGE_SEARCH
+- ANALYSIS, COST_ESTIMATE, CROWDEDNESS, IMAGE_SEARCH
 
 Respond in JSON: {"intent": "INTENT_NAME", "confidence": 0.0-1.0}
 """

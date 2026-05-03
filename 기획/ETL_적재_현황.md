@@ -43,7 +43,7 @@
 |---|---:|---:|---|
 | places_vector | ~475K | 535,431 | 재적재 진행 중 |
 | events_vector | 7,301 | 7,301 | 완료 |
-| place_reviews | ~500 | ~10,000 | 크롤링 진행 중 |
+| place_reviews | ~7,572 | ~10,000 | 크롤링 진행 중 |
 
 공통: 768d Gemini (gemini-embedding-001), nori 한국어 분석기, k-NN HNSW cosinesimil
 

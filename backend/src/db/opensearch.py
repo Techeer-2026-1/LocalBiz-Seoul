@@ -9,7 +9,7 @@ from __future__ import annotations
 
 from typing import Optional
 
-from opensearchpy import AsyncOpenSearch
+from opensearchpy._async.client import AsyncOpenSearch
 
 from src.config import get_settings
 
