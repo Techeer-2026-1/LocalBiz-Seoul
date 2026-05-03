@@ -167,6 +167,31 @@ async def review_compare_node(state: dict[str, Any]) -> dict[str, Any]:
     os_client = get_os_client()
 
     places = await _fetch_places_pg(pool, place_names, os_client)
+
+    if len(places) == 0:
+        return {
+            "response_blocks": [
+                {
+                    "type": "disambiguation",
+                    "message": "장소를 찾을 수 없어요. 정확한 장소명으로 다시 입력해주세요.",
+                    "candidates": [],
+                }
+            ]
+        }
+
+    if len(places) == 1:
+        found = places[0]["name"]
+        not_found = next((n for n in place_names if n not in found), place_names[-1])
+        return {
+            "response_blocks": [
+                {
+                    "type": "text_stream",
+                    "system": _COMPARE_SYSTEM_PROMPT,
+                    "prompt": f"'{not_found}'은(는) 찾을 수 없었어요. 대신 '{found}'을(를) 소개해드릴게요.\n\n사용자 질문: {query}",
+                }
+            ]
+        }
+
     scores_map = await _fetch_scores_os(os_client, [p["place_id"] for p in places])
     blocks = _build_compare_blocks(query, places, scores_map)
 

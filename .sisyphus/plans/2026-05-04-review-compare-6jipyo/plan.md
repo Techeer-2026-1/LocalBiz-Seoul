@@ -124,7 +124,9 @@ intent → status → text_stream → chart → analysis_sources → done
   ```
 
 **step 5**: `review_compare_node(state) → dict` — LangGraph 노드
-- 장소명 2개 미만 → `{"response_blocks": [{"type": "disambiguation", "message": "어느 장소와 비교하시겠어요?", "candidates": []}]}`
+- 장소명 추출 2개 미만 → `{"response_blocks": [{"type": "disambiguation", "message": "어느 장소와 비교하시겠어요?", "candidates": []}]}`
+- PG 조회 후 `len(places) == 0` → disambiguation ("장소를 찾을 수 없어요. 정확한 장소명으로 다시 입력해주세요.")
+- PG 조회 후 `len(places) == 1` → text_stream으로 찾은 장소 소개 ("X는 찾을 수 없었어요. 대신 Y를 소개해드릴게요.")
 - 정상 흐름: _extract → _fetch_places_pg → _fetch_scores_os → _build_compare_blocks 순 호출
 
 > verify: `pytest tests/test_review_compare_node.py -v`

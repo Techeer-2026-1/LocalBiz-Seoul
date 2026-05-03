@@ -179,3 +179,59 @@ async def test_review_compare_node_disambiguation() -> None:
     assert blocks[0]["type"] == "disambiguation"
     assert "어느 장소와 비교하시겠어요?" in blocks[0]["message"]
     assert blocks[0]["candidates"] == []
+
+
+async def test_review_compare_node_one_place_not_found() -> None:
+    """PG에서 한 장소 미매칭 → 1건 resolve → 찾은 장소 text_stream 소개."""
+    from unittest.mock import patch
+
+    from src.graph.review_compare_node import review_compare_node  # pyright: ignore[reportMissingImports]
+
+    fetch_results = [
+        [{"place_id": "uuid-1", "name": "맥도날드장안", "category": "음식점", "district": "동대문구"}],
+        [],
+    ]
+
+    mock_pool = MagicMock()
+    mock_pool.fetch = AsyncMock(side_effect=fetch_results)
+    mock_os = MagicMock()
+
+    with patch("src.db.postgres.get_pool", return_value=mock_pool), patch(
+        "src.db.opensearch.get_os_client", return_value=mock_os
+    ):
+        state: dict[str, Any] = {
+            "query": "맥도날드장안 vs 없는장소 비교",
+            "processed_query": {},
+        }
+        result = await review_compare_node(state)
+
+    blocks = result["response_blocks"]
+    assert len(blocks) == 1
+    assert blocks[0]["type"] == "text_stream"
+    assert "없는장소" in blocks[0]["prompt"]
+    assert "맥도날드장안" in blocks[0]["prompt"]
+
+
+async def test_review_compare_node_no_places_found() -> None:
+    """PG에서 두 장소 모두 미매칭 → disambiguation 블록 반환."""
+    from unittest.mock import patch
+
+    from src.graph.review_compare_node import review_compare_node  # pyright: ignore[reportMissingImports]
+
+    mock_pool = MagicMock()
+    mock_pool.fetch = AsyncMock(return_value=[])
+    mock_os = MagicMock()
+
+    with patch("src.db.postgres.get_pool", return_value=mock_pool), patch(
+        "src.db.opensearch.get_os_client", return_value=mock_os
+    ):
+        state: dict[str, Any] = {
+            "query": "없는장소A vs 없는장소B 비교",
+            "processed_query": {},
+        }
+        result = await review_compare_node(state)
+
+    blocks = result["response_blocks"]
+    assert len(blocks) == 1
+    assert blocks[0]["type"] == "disambiguation"
+    assert blocks[0]["candidates"] == []
