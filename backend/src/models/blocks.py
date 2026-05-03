@@ -165,25 +165,19 @@ class MapRouteBlock(BaseModel):
 # ---------------------------------------------------------------------------
 # 10. chart — 레이더 차트 (REVIEW_COMPARE / ANALYSIS)
 # ---------------------------------------------------------------------------
-class ChartDataset(BaseModel):
-    """차트 한 데이터셋 (장소 1개 분량)."""
+class ChartPlaceScore(BaseModel):
+    """레이더 차트 장소 1개 — 기획서 v2 SSE L157."""
 
-    label: str
-    # 6 지표 고정 (불변식 #6)
-    score_satisfaction: Optional[float] = None
-    accessibility: Optional[float] = None
-    cleanliness: Optional[float] = None
-    value: Optional[float] = None
-    atmosphere: Optional[float] = None
-    expertise: Optional[float] = None
+    name: str
+    scores: dict[str, float] = Field(default_factory=dict)  # 6지표 키 그대로 (불변식 #6)
 
 
 class ChartBlock(BaseModel):
-    """레이더 차트 (6 지표 비교)."""
+    """레이더 차트 (6 지표 비교 — REVIEW_COMPARE)."""
 
     type: str = "chart"
-    chart_type: str = "radar"  # 현재 radar만 지원
-    datasets: list[ChartDataset] = Field(default_factory=list)
+    chart_type: str = "radar"
+    places: list[ChartPlaceScore] = Field(default_factory=list)
 
 
 # ---------------------------------------------------------------------------
