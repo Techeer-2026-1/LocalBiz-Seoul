@@ -1,0 +1,26 @@
+name: Deploy to GCE (dev)
+
+on:
+  push:
+    branches: [dev]
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy via SSH
+        uses: appleboy/ssh-action@0ff4204d59e8e51228ff73bce53f80d53301dee2 # v1
+        with:
+          host: ${{ secrets.GCE_HOST }}
+          username: ${{ secrets.GCE_USER }}
+          key: ${{ secrets.GCE_SSH_PRIVATE_KEY }}
+          fingerprint: "SHA256:WXR+ElhZhKHqJPfqJR/Y/d0JwXxfDDWFjz+YTIl6y3Y"
+          script: |
+            set -euo pipefail
+            cd ~/LocalBiz-Seoul
+            git fetch origin dev
+            git checkout dev
+            git pull origin dev
+            source venv/bin/activate
+            pip install -q -r backend/requirements.txt
+            sudo systemctl restart localbiz-api
