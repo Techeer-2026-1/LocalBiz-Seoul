@@ -25,6 +25,7 @@ from src.graph.query_preprocessor_node import (  # pyright: ignore[reportMissing
     query_preprocessor_node,
 )
 from src.graph.response_builder_node import response_builder_node  # pyright: ignore[reportMissingImports]
+from src.graph.review_compare_node import review_compare_node  # pyright: ignore[reportMissingImports]
 from src.graph.state import AgentState  # pyright: ignore[reportMissingImports]
 
 # ---------------------------------------------------------------------------
@@ -81,6 +82,7 @@ def _route_by_intent(state: AgentState) -> str:
         "DETAIL_INQUIRY": "detail_inquiry",
         "BOOKING": "booking",
         "CALENDAR": "calendar",
+        "REVIEW_COMPARE": "review_compare",
     }
     return mapping.get(str(intent), "general")
 
@@ -111,6 +113,7 @@ def build_graph(checkpointer: Optional[Any] = None) -> Any:
     graph.add_node("detail_inquiry", detail_inquiry_node)
     graph.add_node("booking", booking_node)
     graph.add_node("calendar", calendar_node)
+    graph.add_node("review_compare", review_compare_node)
     graph.add_node("response_builder", response_builder_node)
 
     # 엣지 설정
@@ -130,6 +133,7 @@ def build_graph(checkpointer: Optional[Any] = None) -> Any:
             "detail_inquiry": "detail_inquiry",
             "booking": "booking",
             "calendar": "calendar",
+            "review_compare": "review_compare",
             "general": "general",
         },
     )
@@ -145,6 +149,7 @@ def build_graph(checkpointer: Optional[Any] = None) -> Any:
         "detail_inquiry",
         "booking",
         "calendar",
+        "review_compare",
     ]:
         graph.add_edge(node_name, "response_builder")
 
