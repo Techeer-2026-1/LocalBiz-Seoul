@@ -10,7 +10,12 @@ DB CHECK 제약 (users_email_or_google_chk)이 위반을 차단하지만,
 동시성 정책 (CodeRabbit #4 권장 반영):
   - check-then-insert 패턴 금지 (race window 발생 가능)
   - INSERT ... ON CONFLICT DO NOTHING RETURNING 으로 atomic 보장
-  - 결과가 None이면 동시에 다른 요청이 같은 email/google_id로 가입 성공 → 409 또는 재조회
+  - asyncpg.UniqueViolationError를 명시적으로 잡아 500 대신 409 응답
+
+비동기 정책 (CodeRabbit Major 학습 — 본 PR #42):
+  - async def 함수에서 동기 I/O (HTTP, blocking syscall) 호출 금지
+  - 외부 라이브러리의 동기 함수는 asyncio.to_thread()로 감싸서 별도 스레드 실행
+  - event loop 블록 방지 → 동시 요청 처리 능력 보존
 
 보안 정책 (CodeRabbit #3 학습 적용):
   - 로그인 401 응답은 항상 동일한 고정 메시지.
@@ -22,9 +27,11 @@ DB CHECK 제약 (users_email_or_google_chk)이 위반을 차단하지만,
 
 from __future__ import annotations
 
+import asyncio
 import logging
 from typing import Optional
 
+import asyncpg
 from fastapi import HTTPException, status
 
 from src.config import get_settings  # pyright: ignore[reportMissingImports]
@@ -58,6 +65,11 @@ _GOOGLE_TOKEN_INVALID_DETAIL = "유효하지 않은 Google 토큰입니다"
 # 같은 email이 email/password 방식으로 이미 가입된 경우 자동 통합 거부.
 # 보안 정책: Google 계정 탈취 시 password 가입자 계정까지 탈취되는 위험 차단.
 _EMAIL_CONFLICT_DETAIL = "이미 다른 방식으로 가입된 이메일입니다"
+
+# Google 로그인 410 응답 메시지 (탈퇴자 google_id 재사용).
+# soft-deleted 사용자가 같은 google_id로 재가입 시도하는 경우.
+# 본 PR은 차단 정책 (계정 복구는 후속 plan에서).
+_DELETED_USER_DETAIL = "탈퇴 처리된 계정입니다. 관리자에게 문의해주세요"
 
 
 # ---------------------------------------------------------------------------
@@ -228,11 +240,15 @@ async def login_google(req: GoogleLoginRequest) -> tuple[TokenResponse, bool]:
     실패:
       401 — id_token 무효 (위조/만료/audience 불일치 등)
       409 — email 충돌 (같은 email이 email/password 방식으로 이미 가입됨)
+      410 — 탈퇴자 google_id 재사용 (관리자 문의 안내)
 
     동시성:
       INSERT ... ON CONFLICT (google_id) DO NOTHING으로 atomic 보장.
-      RETURNING None 시 다른 요청이 동시에 같은 google_id로 INSERT 성공한 race window.
-      이 경우 SELECT 한 번 더 시도하여 기존 사용자로 처리 (200 반환).
+      추가로 asyncpg.UniqueViolationError를 명시적으로 잡아 email UNIQUE 위반도 처리.
+
+    비동기 (CodeRabbit Major 학습):
+      verify_google_id_token이 동기 HTTP I/O를 수행하므로 asyncio.to_thread로 감싸
+      event loop 블록 방지. 동시 요청 처리 능력 보존.
 
     19 불변식 #15:
       - 신규 INSERT 시 auth_provider='google' 고정, password_hash NULL, google_id NOT NULL.
@@ -244,12 +260,18 @@ async def login_google(req: GoogleLoginRequest) -> tuple[TokenResponse, bool]:
       - google_id는 Google이 발급하는 외부 ID라 그대로 노출 OK (사용자 식별 불가).
     """
     pool = get_pool()
+    settings = get_settings()
 
     # 1) Google ID token 검증 — google-auth 라이브러리 위임.
+    # 동기 함수라 asyncio.to_thread()로 감싸서 별도 스레드 실행 (event loop 블록 방지).
     # ValueError: 위조/만료/audience 불일치 등 모든 검증 실패.
     # 모든 ValueError를 401로 일괄 처리 (user enumeration 방지).
     try:
-        payload = verify_google_id_token(req.id_token, get_settings().google_client_id)
+        payload = await asyncio.to_thread(
+            verify_google_id_token,
+            req.id_token,
+            settings.google_client_id,
+        )
     except ValueError:
         logger.info("google login failed: invalid id_token")
         raise HTTPException(
@@ -291,43 +313,38 @@ async def login_google(req: GoogleLoginRequest) -> tuple[TokenResponse, bool]:
             False,
         )
 
-    # 4) email 충돌 검사 — 같은 email이 email/password 방식으로 가입됐는지
-    # auth_provider 무관하게 email UNIQUE 제약이 있으므로 INSERT가 실패할 수 있음.
-    # 사전에 명확한 에러 메시지(409)로 차단.
-    email_conflict = await pool.fetchrow(
-        """
-        SELECT user_id
-        FROM users
-        WHERE email = $1 AND is_deleted = FALSE
-        """,
-        email,
-    )
-
-    if email_conflict is not None:
+    # 4) 신규 INSERT — atomic, race-safe.
+    # 두 가지 UNIQUE 제약 (email, google_id) 모두 처리:
+    #   - ON CONFLICT (google_id) DO NOTHING: 같은 google_id 충돌 → RETURNING None
+    #   - email UNIQUE 위반: asyncpg.UniqueViolationError raise
+    # try/except로 두 케이스 모두 명시적 처리하여 raw 500 방지.
+    try:
+        inserted = await pool.fetchrow(
+            """
+            INSERT INTO users (email, password_hash, auth_provider, google_id, nickname)
+            VALUES ($1, NULL, 'google', $2, $3)
+            ON CONFLICT (google_id) DO NOTHING
+            RETURNING user_id, email, nickname
+            """,
+            email,
+            google_id,
+            nickname,
+        )
+    except asyncpg.UniqueViolationError as e:
+        # email UNIQUE 위반 — 같은 email이 다른 auth_provider(=email) 사용자에게 이미 존재.
+        # 보안 정책: 자동 통합 거부 (Google 계정 탈취 시 password 가입자 계정까지 탈취 위험).
+        constraint = getattr(e, "constraint_name", None) or ""
         logger.info(
-            "google login failed: email already used by another auth_provider (email=%s)",
+            "google login failed: unique violation on insert (email=%s, constraint=%s)",
             _mask_email(email),
+            constraint,
         )
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT,
             detail=_EMAIL_CONFLICT_DETAIL,
-        )
+        ) from None
 
-    # 5) 신규 INSERT — atomic, race-safe.
-    # ON CONFLICT (google_id) DO NOTHING: 같은 google_id 동시 INSERT 시 한쪽만 성공.
-    inserted = await pool.fetchrow(
-        """
-        INSERT INTO users (email, password_hash, auth_provider, google_id, nickname)
-        VALUES ($1, NULL, 'google', $2, $3)
-        ON CONFLICT (google_id) DO NOTHING
-        RETURNING user_id, email, nickname
-        """,
-        email,
-        google_id,
-        nickname,
-    )
-
-    # 5-a) 신규 INSERT 성공 → 201 신규 가입
+    # 4-a) 신규 INSERT 성공 → 201 신규 가입
     if inserted is not None:
         return (
             _build_token_response(
@@ -338,21 +355,23 @@ async def login_google(req: GoogleLoginRequest) -> tuple[TokenResponse, bool]:
             True,
         )
 
-    # 5-b) RETURNING None = race window (동시에 다른 요청이 같은 google_id INSERT 성공)
-    # 다시 SELECT하여 기존 사용자로 처리 (200).
+    # 4-b) RETURNING None = google_id ON CONFLICT 발동.
+    # 두 가지 케이스 가능:
+    #   - 동시 요청이 같은 google_id로 INSERT 성공 (race window) → 활성 사용자로 SELECT 가능
+    #   - soft-deleted 사용자가 같은 google_id로 재가입 시도 → is_deleted=FALSE SELECT 결과 없음
     raced = await pool.fetchrow(
         """
-        SELECT user_id, email, nickname
+        SELECT user_id, email, nickname, is_deleted
         FROM users
-        WHERE google_id = $1 AND is_deleted = FALSE
+        WHERE google_id = $1
         """,
         google_id,
     )
 
-    # 정상 흐름에선 도달 불가 (방금 INSERT가 실패했으니 SELECT는 성공해야 함). 방어적 코드.
+    # 4-b-1) 정상 흐름에선 도달 불가 (방금 ON CONFLICT 발동했으니 row 존재해야 함). 방어적 코드.
     if raced is None:
         logger.warning(
-            "google login race: INSERT skipped but SELECT also failed (google_id=%s)",
+            "google login race: ON CONFLICT but SELECT failed (google_id=%s)",
             google_id,
         )
         raise HTTPException(
@@ -360,6 +379,19 @@ async def login_google(req: GoogleLoginRequest) -> tuple[TokenResponse, bool]:
             detail="internal error during google login",
         )
 
+    # 4-b-2) 탈퇴자 → 410 (관리자 문의 안내, 자동 복구 거부)
+    # 본 PR은 차단 정책. 계정 복구는 후속 plan.
+    if raced["is_deleted"]:
+        logger.info(
+            "google login blocked: deleted user attempted re-signup (google_id=%s)",
+            google_id,
+        )
+        raise HTTPException(
+            status_code=status.HTTP_410_GONE,
+            detail=_DELETED_USER_DETAIL,
+        )
+
+    # 4-b-3) 활성 사용자 (race window 정상 처리) → 200 로그인
     return (
         _build_token_response(
             user_id=raced["user_id"],

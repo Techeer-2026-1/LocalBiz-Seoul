@@ -143,6 +143,7 @@ async def test_login_google_user_via_password(client: AsyncClient, db_pool) -> N
 # ---------------------------------------------------------------------------
 _GOOGLE_TOKEN_INVALID = "유효하지 않은 Google 토큰입니다"
 _EMAIL_CONFLICT = "이미 다른 방식으로 가입된 이메일입니다"
+_DELETED_USER = "탈퇴 처리된 계정입니다. 관리자에게 문의해주세요"
 
 
 @pytest.fixture
@@ -151,7 +152,8 @@ def mock_google_verify(monkeypatch: pytest.MonkeyPatch):
 
     Python import 메커니즘 주의:
       - core.security가 아닌 services.auth_service에 import된 위치를 mock해야 함.
-      - 함수 호출 시점에 services.auth_service.verify_google_id_token이 참조되므로.
+      - asyncio.to_thread(verify_google_id_token, ...)로 호출되므로
+        services.auth_service의 참조를 가로채야 함.
     """
 
     def _setup(payload: Optional[dict[str, Any]] = None, raise_error: bool = False) -> None:
@@ -255,7 +257,10 @@ async def test_google_login_email_conflict_409(
     client: AsyncClient,
     mock_google_verify,  # noqa: ANN001
 ) -> None:
-    """email/password로 이미 가입된 email로 google 로그인 시도 → 409."""
+    """email/password로 이미 가입된 email로 google 로그인 시도 → 409.
+
+    INSERT 시도 중 email UNIQUE 위반을 try/except로 잡아 409로 변환 (CodeRabbit Major 학습).
+    """
     email = "pytest-google-conflict@example.com"
 
     # 1) email/password로 먼저 가입
@@ -274,3 +279,36 @@ async def test_google_login_email_conflict_409(
     )
     assert res.status_code == 409
     assert res.json()["detail"] == _EMAIL_CONFLICT
+
+
+async def test_google_login_deleted_user_410(
+    client: AsyncClient,
+    db_pool,  # noqa: ANN001
+    mock_google_verify,  # noqa: ANN001
+) -> None:
+    """탈퇴 처리된(is_deleted=TRUE) google 사용자가 같은 google_id로 재시도 → 410.
+
+    CodeRabbit Major 학습: 이전엔 500 분기로 빠졌으나 이제 410 명확한 응답.
+    """
+    google_id = "fake-google-sub-deleted-001"
+    email = "pytest-google-deleted@example.com"
+
+    # 사전 INSERT 후 is_deleted=TRUE로 탈퇴 시뮬레이션
+    await db_pool.execute(
+        """
+        INSERT INTO users (email, password_hash, auth_provider, google_id, nickname, is_deleted)
+        VALUES ($1, NULL, 'google', $2, $3, TRUE)
+        """,
+        email,
+        google_id,
+        "탈퇴자",
+    )
+
+    mock_google_verify(payload={"sub": google_id, "email": email, "name": "탈퇴자"})
+
+    res = await client.post(
+        "/api/v1/auth/google",
+        json={"id_token": "fake-id-token-anything"},
+    )
+    assert res.status_code == 410
+    assert res.json()["detail"] == _DELETED_USER
