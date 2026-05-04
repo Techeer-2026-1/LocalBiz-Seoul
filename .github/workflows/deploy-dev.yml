@@ -14,7 +14,7 @@ jobs:
           host: ${{ secrets.GCE_HOST }}
           username: ${{ secrets.GCE_USER }}
           key: ${{ secrets.GCE_SSH_PRIVATE_KEY }}
-          fingerprint: "SHA256:WXR+ElhZhKHqJPfqJR/Y/d0JwXxfDDWFjz+YTIl6y3Y"
+          fingerprint: "SHA256:XvtjREpecV3gLUIul+W0Uudb/S9o8ueXbUojqjYKrFs"
           script: |
             set -euo pipefail
             cd ~/LocalBiz-Seoul
