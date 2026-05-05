@@ -17,6 +17,7 @@ from langgraph.graph import END, StateGraph
 
 from src.graph.booking_node import booking_node  # pyright: ignore[reportMissingImports]
 from src.graph.calendar_node import calendar_node  # pyright: ignore[reportMissingImports]
+from src.graph.crowdedness_node import crowdedness_node  # pyright: ignore[reportMissingImports]
 from src.graph.detail_inquiry_node import detail_inquiry_node  # pyright: ignore[reportMissingImports]  # noqa: F401
 from src.graph.general_node import general_node  # pyright: ignore[reportMissingImports]
 from src.graph.intent_router_node import intent_router_node  # pyright: ignore[reportMissingImports]
@@ -83,6 +84,7 @@ def _route_by_intent(state: AgentState) -> str:
         "BOOKING": "booking",
         "CALENDAR": "calendar",
         "REVIEW_COMPARE": "review_compare",
+        "CROWDEDNESS": "crowdedness",
     }
     return mapping.get(str(intent), "general")
 
@@ -114,6 +116,7 @@ def build_graph(checkpointer: Optional[Any] = None) -> Any:
     graph.add_node("booking", booking_node)
     graph.add_node("calendar", calendar_node)
     graph.add_node("review_compare", review_compare_node)
+    graph.add_node("crowdedness", crowdedness_node)
     graph.add_node("response_builder", response_builder_node)
 
     # 엣지 설정
@@ -134,6 +137,7 @@ def build_graph(checkpointer: Optional[Any] = None) -> Any:
             "booking": "booking",
             "calendar": "calendar",
             "review_compare": "review_compare",
+            "crowdedness": "crowdedness",
             "general": "general",
         },
     )
@@ -150,6 +154,7 @@ def build_graph(checkpointer: Optional[Any] = None) -> Any:
         "booking",
         "calendar",
         "review_compare",
+        "crowdedness",
     ]:
         graph.add_edge(node_name, "response_builder")
 
