@@ -115,13 +115,17 @@ async def _fetch_population(
                 COALESCE(SUM(cur.total_pop), 0) AS current_pop,
                 l.d AS base_date,
                 COALESCE(
-                    (SELECT AVG(p2.total_pop)
-                     FROM administrative_districts a2
-                     JOIN population_stats p2 ON p2.adm_dong_code = a2.adm_dong_code
-                     CROSS JOIN latest
-                     WHERE a2.district = $1
-                       AND p2.time_slot = $2
-                       AND p2.base_date >= latest.d - INTERVAL '30 days'),
+                    (SELECT AVG(daily_total)
+                     FROM (
+                         SELECT SUM(p2.total_pop) AS daily_total
+                         FROM administrative_districts a2
+                         JOIN population_stats p2 ON p2.adm_dong_code = a2.adm_dong_code
+                         CROSS JOIN latest
+                         WHERE a2.district = $1
+                           AND p2.time_slot = $2
+                           AND p2.base_date >= latest.d - INTERVAL '30 days'
+                         GROUP BY p2.base_date
+                     ) dt),
                     0
                 ) AS avg_pop
             FROM administrative_districts a
@@ -131,6 +135,7 @@ async def _fetch_population(
                AND cur.base_date = (SELECT d FROM latest)
             CROSS JOIN latest l
             WHERE a.district = $1
+            GROUP BY l.d
             """,
             district,
             time_slot,
