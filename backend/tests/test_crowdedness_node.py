@@ -58,13 +58,17 @@ async def test_classify_level_zero_avg() -> None:
     pool = MagicMock()
     pool.fetchrow = AsyncMock(return_value={"adm_dong_code": "1162010100"})
 
-    with patch("src.db.postgres.get_pool", return_value=pool):  # type: ignore[attr-defined]
-        pool.fetchrow = AsyncMock(
-            side_effect=[
-                {"adm_dong_code": "1162010100"},
-                pop_row,
-            ]
-        )
+    with (
+        patch("src.db.postgres.get_pool", return_value=pool),
+        patch(
+            "src.graph.crowdedness_node._resolve_dong_code",
+            AsyncMock(return_value=("1162010100", "홍대")),
+        ),
+        patch(
+            "src.graph.crowdedness_node._fetch_population",
+            AsyncMock(return_value=pop_row),
+        ),
+    ):
         result = await crowdedness_node({"processed_query": {"neighborhood": "홍대", "district": None}})
 
     blocks = result["response_blocks"]
@@ -84,7 +88,7 @@ async def test_resolve_dong_code_neighborhood_match() -> None:
     pool.fetchrow = AsyncMock(return_value={"adm_dong_code": "1162010100"})
 
     result = await _resolve_dong_code(pool, "홍대", 14, None)
-    assert result == "1162010100"
+    assert result == ("1162010100", "홍대")
     pool.fetchrow.assert_called_once()
 
 
@@ -96,12 +100,12 @@ async def test_resolve_dong_code_multiple_matches() -> None:
     pool.fetchrow = AsyncMock(return_value={"adm_dong_code": "1162010200"})
 
     result = await _resolve_dong_code(pool, "홍대", 14, "마포구")
-    assert result == "1162010200"
+    assert result == ("1162010200", "홍대")
     assert pool.fetchrow.call_count == 1
 
 
 async def test_resolve_dong_code_district_fallback() -> None:
-    """ILIKE 0건 → district 집계 fallback 대표 dong_code 반환."""
+    """ILIKE 0건 → district 집계 fallback — area_name이 district로 바뀜."""
     from src.graph.crowdedness_node import _resolve_dong_code  # pyright: ignore[reportMissingImports]
 
     pool = MagicMock()
@@ -113,7 +117,7 @@ async def test_resolve_dong_code_district_fallback() -> None:
     )
 
     result = await _resolve_dong_code(pool, "우주정거장", 14, "마포구")
-    assert result == "1162099999"
+    assert result == ("1162099999", "마포구")
     assert pool.fetchrow.call_count == 2
 
 
@@ -205,9 +209,9 @@ async def test_node_uses_kst_hour() -> None:
 
     captured_time_slot: list[int] = []
 
-    async def mock_resolve(p: Any, neighborhood: str, time_slot: int, district: Any) -> Optional[str]:  # type: ignore[name-defined]
+    async def mock_resolve(p: Any, neighborhood: str, time_slot: int, district: Any) -> Optional[tuple[str, str]]:
         captured_time_slot.append(time_slot)
-        return "1162010100"
+        return ("1162010100", neighborhood)
 
     pop_row: dict[str, Any] = {
         "current_pop": 3000,

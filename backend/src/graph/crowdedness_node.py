@@ -28,8 +28,13 @@ async def _resolve_dong_code(
     neighborhood: str,
     time_slot: int,
     district: Optional[str],
-) -> Optional[str]:
-    """neighborhood ILIKE 매칭 → district 대표 dong 집계 fallback → None."""
+) -> Optional[tuple[str, str]]:
+    """neighborhood ILIKE 매칭 → district 대표 dong 집계 fallback → None.
+
+    Returns:
+        (adm_dong_code, resolved_area_name) — ILIKE 성공 시 neighborhood,
+        district fallback 시 district. 둘 다 실패 시 None.
+    """
     row = await pool.fetchrow(
         """
         SELECT a.adm_dong_code
@@ -48,7 +53,7 @@ async def _resolve_dong_code(
         time_slot,
     )
     if row:
-        return row["adm_dong_code"]
+        return row["adm_dong_code"], neighborhood
 
     if not district:
         return None
@@ -71,7 +76,7 @@ async def _resolve_dong_code(
         district,
         time_slot,
     )
-    return row2["adm_dong_code"] if row2 else None
+    return (row2["adm_dong_code"], district) if row2 else None
 
 
 async def _fetch_population(
@@ -202,13 +207,14 @@ async def crowdedness_node(state: dict[str, Any]) -> dict[str, Any]:
 
     pool = get_pool()
     time_slot: int = datetime.now(ZoneInfo("Asia/Seoul")).hour
-    area_name: str = neighborhood or district  # type: ignore[assignment]
 
     dong_code: Optional[str] = None
+    area_name: str = district or ""  # type: ignore[assignment]
     if neighborhood:
-        dong_code = await _resolve_dong_code(pool, neighborhood, time_slot, district)
-        if dong_code is None:
+        resolution = await _resolve_dong_code(pool, neighborhood, time_slot, district)
+        if resolution is None:
             return _no_location()
+        dong_code, area_name = resolution
 
     pop = await _fetch_population(
         pool,
