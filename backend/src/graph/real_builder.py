@@ -19,6 +19,7 @@ from src.graph.booking_node import booking_node  # pyright: ignore[reportMissing
 from src.graph.calendar_node import calendar_node  # pyright: ignore[reportMissingImports]
 from src.graph.detail_inquiry_node import detail_inquiry_node  # pyright: ignore[reportMissingImports]  # noqa: F401
 from src.graph.general_node import general_node  # pyright: ignore[reportMissingImports]
+from src.graph.image_search_node import image_search_node  # pyright: ignore[reportMissingImports]
 from src.graph.intent_router_node import intent_router_node  # pyright: ignore[reportMissingImports]
 from src.graph.place_search_node import place_search_node  # pyright: ignore[reportMissingImports]  # noqa: F401
 from src.graph.query_preprocessor_node import (  # pyright: ignore[reportMissingImports]  # noqa: F401
@@ -83,6 +84,7 @@ def _route_by_intent(state: AgentState) -> str:
         "BOOKING": "booking",
         "CALENDAR": "calendar",
         "REVIEW_COMPARE": "review_compare",
+        "IMAGE_SEARCH": "image_search",
     }
     return mapping.get(str(intent), "general")
 
@@ -114,6 +116,7 @@ def build_graph(checkpointer: Optional[Any] = None) -> Any:
     graph.add_node("booking", booking_node)
     graph.add_node("calendar", calendar_node)
     graph.add_node("review_compare", review_compare_node)
+    graph.add_node("image_search", image_search_node)
     graph.add_node("response_builder", response_builder_node)
 
     # 엣지 설정
@@ -134,6 +137,7 @@ def build_graph(checkpointer: Optional[Any] = None) -> Any:
             "booking": "booking",
             "calendar": "calendar",
             "review_compare": "review_compare",
+            "image_search": "image_search",
             "general": "general",
         },
     )
@@ -150,6 +154,7 @@ def build_graph(checkpointer: Optional[Any] = None) -> Any:
         "booking",
         "calendar",
         "review_compare",
+        "image_search",
     ]:
         graph.add_edge(node_name, "response_builder")
 
