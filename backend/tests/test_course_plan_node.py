@@ -1,0 +1,237 @@
+"""course_plan_node 단위 테스트.
+
+순수 함수 검증: _parse_categories / _greedy_nn_route / _build_blocks / _haversine_m.
+DB/OS/Gemini 의존성은 mock.
+"""
+
+from __future__ import annotations
+
+from typing import Any
+from unittest.mock import AsyncMock, patch
+
+import pytest
+
+pytestmark = pytest.mark.asyncio
+
+# ---------------------------------------------------------------------------
+# 테스트 픽스처 데이터
+# ---------------------------------------------------------------------------
+_PLACES: list[dict[str, Any]] = [
+    {
+        "place_id": "p-001",
+        "name": "광장시장",
+        "category": "맛집",
+        "address": "서울 종로구 창경궁로 88",
+        "district": "종로구",
+        "lat": 37.5701,
+        "lng": 126.9996,
+    },
+    {
+        "place_id": "p-002",
+        "name": "익선동 한옥마을",
+        "category": "관광지",
+        "address": "서울 종로구 익선동",
+        "district": "종로구",
+        "lat": 37.5743,
+        "lng": 126.9912,
+    },
+    {
+        "place_id": "p-003",
+        "name": "경복궁",
+        "category": "관광지",
+        "address": "서울 종로구 사직로 161",
+        "district": "종로구",
+        "lat": 37.5796,
+        "lng": 126.977,
+    },
+]
+
+
+# ---------------------------------------------------------------------------
+# _parse_categories 테스트
+# ---------------------------------------------------------------------------
+async def test_parse_categories_plus() -> None:
+    """+ 구분자로 카테고리 추출."""
+    from src.graph.course_plan_node import _parse_categories  # pyright: ignore[reportMissingImports]
+
+    result = _parse_categories("홍대 카페+맛집 코스", None)
+    assert "카페" in result
+    assert "맛집" in result
+
+
+async def test_parse_categories_single() -> None:
+    """단일 카테고리 — processed_query에서 가져옴."""
+    from src.graph.course_plan_node import _parse_categories  # pyright: ignore[reportMissingImports]
+
+    result = _parse_categories("강남 데이트 코스", "카페")
+    assert result == ["카페"]
+
+
+async def test_parse_categories_fallback() -> None:
+    """카테고리 없으면 맛집 기본값."""
+    from src.graph.course_plan_node import _parse_categories  # pyright: ignore[reportMissingImports]
+
+    result = _parse_categories("좋은 곳 추천", None)
+    assert result == ["맛집"]
+
+
+# ---------------------------------------------------------------------------
+# _haversine_m 테스트
+# ---------------------------------------------------------------------------
+async def test_haversine_distance() -> None:
+    """광장시장 → 익선동 거리 계산 (약 800m)."""
+    from src.graph.course_plan_node import _haversine_m  # pyright: ignore[reportMissingImports]
+
+    dist = _haversine_m(37.5701, 126.9996, 37.5743, 126.9912)
+    assert 500 < dist < 1500
+
+
+# ---------------------------------------------------------------------------
+# _greedy_nn_route 테스트
+# ---------------------------------------------------------------------------
+async def test_greedy_nn_route_order() -> None:
+    """Greedy NN — 최근접 이웃 순서로 재배치."""
+    from src.graph.course_plan_node import _greedy_nn_route  # pyright: ignore[reportMissingImports]
+
+    route = _greedy_nn_route(_PLACES)
+    assert len(route) == 3
+    # 첫 번째는 그대로, 나머지는 거리 기반
+    assert route[0]["place_id"] == "p-001"
+
+
+async def test_greedy_nn_max_stops() -> None:
+    """최대 5건으로 제한."""
+    from src.graph.course_plan_node import _greedy_nn_route  # pyright: ignore[reportMissingImports]
+
+    many = [
+        {"place_id": f"p-{i}", "name": f"장소{i}", "lat": 37.5 + i * 0.01, "lng": 127.0 + i * 0.01} for i in range(10)
+    ]
+    route = _greedy_nn_route(many)
+    assert len(route) == 5
+
+
+async def test_greedy_nn_no_coords() -> None:
+    """좌표 없는 후보만 있을 때."""
+    from src.graph.course_plan_node import _greedy_nn_route  # pyright: ignore[reportMissingImports]
+
+    no_coords = [{"place_id": f"p-{i}", "name": f"장소{i}", "lat": None, "lng": None} for i in range(3)]
+    route = _greedy_nn_route(no_coords)
+    assert len(route) == 3
+
+
+# ---------------------------------------------------------------------------
+# _build_blocks 테스트
+# ---------------------------------------------------------------------------
+async def test_build_blocks_normal() -> None:
+    """정상 3-stop 코스 → text_stream + course + map_route 블록."""
+    from src.graph.course_plan_node import _build_blocks  # pyright: ignore[reportMissingImports]
+
+    stop_details = [
+        {
+            "order": 1,
+            "arrival_time": "11:00",
+            "duration_min": 60,
+            "recommendation_reason": "전통시장",
+            "transit_mode": "walk",
+        },
+        {
+            "order": 2,
+            "arrival_time": "12:12",
+            "duration_min": 90,
+            "recommendation_reason": "한옥마을",
+            "transit_mode": "walk",
+        },
+        {
+            "order": 3,
+            "arrival_time": "14:00",
+            "duration_min": 60,
+            "recommendation_reason": "궁궐",
+            "transit_mode": None,
+        },
+    ]
+
+    blocks = _build_blocks("종로 코스", _PLACES, "도심 코스", "3곳 코스", stop_details, "test-uuid")
+    types = [b["type"] for b in blocks]
+
+    assert "text_stream" in types
+    assert "course" in types
+    assert "map_route" in types
+
+    # course 블록 검증
+    course = next(b for b in blocks if b["type"] == "course")
+    assert course["course_id"] == "test-uuid"
+    assert len(course["stops"]) == 3
+    assert course["stops"][0]["order"] == 1
+    assert course["stops"][2]["transit_to_next"] is None  # 마지막 stop
+    assert course["total_duration_min"] == course["total_stay_min"] + course["total_transit_min"]
+
+    # map_route 블록 검증
+    map_route = next(b for b in blocks if b["type"] == "map_route")
+    assert map_route["course_id"] == "test-uuid"
+    assert len(map_route["markers"]) == 3
+    assert map_route["markers"][0]["order"] == 1
+    assert len(map_route["polyline"]["segments"]) == 2  # 3 stops → 2 segments
+    # GeoJSON [lng, lat] 순서
+    assert map_route["polyline"]["segments"][0]["coordinates"][0][0] == _PLACES[0]["lng"]
+
+
+async def test_build_blocks_empty() -> None:
+    """빈 결과 → text_stream만 + 빈 course 블록."""
+    from src.graph.course_plan_node import _build_blocks  # pyright: ignore[reportMissingImports]
+
+    blocks = _build_blocks("없는 코스", [], None, None, [], "test-uuid")
+    types = [b["type"] for b in blocks]
+    assert "text_stream" in types
+    assert "course" in types
+
+
+async def test_build_blocks_single_stop() -> None:
+    """단일 stop → transit_to_next null, polyline segments 없음."""
+    from src.graph.course_plan_node import _build_blocks  # pyright: ignore[reportMissingImports]
+
+    single = [_PLACES[0]]
+    details = [
+        {"order": 1, "arrival_time": "11:00", "duration_min": 60, "recommendation_reason": "시장", "transit_mode": None}
+    ]
+
+    blocks = _build_blocks("시장 코스", single, "시장 코스", "1곳", details, "test-uuid")
+    course = next(b for b in blocks if b["type"] == "course")
+    assert len(course["stops"]) == 1
+    assert course["stops"][0]["transit_to_next"] is None
+
+    map_route = next(b for b in blocks if b["type"] == "map_route")
+    assert len(map_route["polyline"]["segments"]) == 0
+
+
+# ---------------------------------------------------------------------------
+# _llm_course_compose fallback 테스트
+# ---------------------------------------------------------------------------
+async def test_llm_compose_fallback() -> None:
+    """Gemini 실패 시 None 반환 → _apply_fallback_times 적용."""
+    from src.graph.course_plan_node import _apply_fallback_times  # pyright: ignore[reportMissingImports]
+
+    details = _apply_fallback_times(_PLACES)
+    assert len(details) == 3
+    assert details[0]["arrival_time"] == "11:00"
+    assert details[0]["duration_min"] == 60
+    assert details[2]["transit_mode"] is None  # 마지막
+
+
+async def test_llm_compose_api_error() -> None:
+    """Gemini API 에러 → (None, None, []) 반환."""
+    from src.graph.course_plan_node import _llm_course_compose  # pyright: ignore[reportMissingImports]
+
+    mock_settings = type("Settings", (), {"gemini_llm_api_key": "fake-key"})()
+
+    with (
+        patch("src.config.get_settings", return_value=mock_settings),
+        patch("langchain_google_genai.ChatGoogleGenerativeAI") as mock_llm_cls,
+    ):
+        mock_llm = AsyncMock()
+        mock_llm.ainvoke.side_effect = Exception("API error")
+        mock_llm_cls.return_value = mock_llm
+
+        title, desc, details = await _llm_course_compose(_PLACES, "테스트")
+
+    assert title is None
+    assert details == []
