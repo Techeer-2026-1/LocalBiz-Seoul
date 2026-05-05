@@ -79,15 +79,23 @@ def _parse_categories(query: str, pq_category: Optional[str]) -> list[str]:
     """쿼리에서 복수 카테고리 추출. "카페+맛집" → ["카페", "맛집"]."""
     categories: list[str] = []
 
+    _KNOWN_CATEGORIES = ["카페", "맛집", "음식점", "술집", "주점", "관광지", "공원", "쇼핑", "문화시설"]
+
     # query에서 +, &, 와/과 구분자로 분리 — 첫 매칭 구분자만 사용
     for sep in ["+", "&", "와 ", "과 ", ", "]:
         if sep in query:
             parts = [p.strip() for p in query.split(sep)]
             for part in parts:
-                for keyword in ["카페", "맛집", "음식점", "술집", "주점", "관광지", "공원", "쇼핑", "문화시설"]:
+                for keyword in _KNOWN_CATEGORIES:
                     if keyword in part and keyword not in categories:
                         categories.append(keyword)
             break  # 첫 매칭 구분자로만 파싱
+
+    # 구분자 없는 단일 카테고리 쿼리 ("홍대 카페 코스") — whole-query 키워드 스캔
+    if not categories:
+        for keyword in _KNOWN_CATEGORIES:
+            if keyword in query and keyword not in categories:
+                categories.append(keyword)
 
     if not categories and pq_category:
         categories = [pq_category]
@@ -187,9 +195,9 @@ async def _search_by_categories(
 
     for cat in categories:
         tasks.append(_search_pg(pool, district, cat, neighborhood))
-
-    if os_client and api_key:
-        tasks.append(_search_os(os_client, expanded_query, api_key))
+        # 카테고리별 OS 검색 — 카테고리 키워드를 포함한 쿼리로 분리
+        if os_client and api_key:
+            tasks.append(_search_os(os_client, f"{expanded_query} {cat}", api_key))
 
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -330,9 +338,24 @@ async def _llm_course_compose(
             text = text.strip()
 
         result = json.loads(text)
+        if not isinstance(result, dict):
+            logger.warning("LLM course compose: 응답이 dict 아님 → fallback")
+            return None, None, []
+
         title = result.get("title")
         description = result.get("description")
-        stop_details = result.get("stops", [])
+        raw_stops = result.get("stops", [])
+
+        # stops 요소 검증 — dict가 아니거나 order 없으면 제외
+        stop_details: list[dict[str, Any]] = []
+        for s in raw_stops:
+            if not isinstance(s, dict):
+                continue
+            # duration_min 타입 정규화
+            dur = s.get("duration_min")
+            if isinstance(dur, str) and dur.isdigit():
+                s["duration_min"] = int(dur)
+            stop_details.append(s)
 
         return title, description, stop_details
 
