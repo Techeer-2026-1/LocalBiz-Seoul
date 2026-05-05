@@ -15,6 +15,7 @@ from typing import Any, Optional
 
 from langgraph.graph import END, StateGraph
 
+from src.graph.analysis_node import analysis_node  # pyright: ignore[reportMissingImports]
 from src.graph.booking_node import booking_node  # pyright: ignore[reportMissingImports]
 from src.graph.calendar_node import calendar_node  # pyright: ignore[reportMissingImports]
 from src.graph.course_plan_node import course_plan_node  # pyright: ignore[reportMissingImports]  # noqa: F401
@@ -61,6 +62,7 @@ def _route_by_intent(state: AgentState) -> str:
         - DETAIL_INQUIRY → "detail_inquiry"
         - BOOKING → "booking"
         - CALENDAR → "calendar"
+        - ANALYSIS → "analysis"
         - GENERAL (fallback) → "general"
         - Phase 2 intents → "general" (Phase 2에서 확장)
     """
@@ -75,6 +77,7 @@ def _route_by_intent(state: AgentState) -> str:
         "BOOKING": "booking",
         "CALENDAR": "calendar",
         "REVIEW_COMPARE": "review_compare",
+        "ANALYSIS": "analysis",
     }
     return mapping.get(str(intent), "general")
 
@@ -106,6 +109,7 @@ def build_graph(checkpointer: Optional[Any] = None) -> Any:
     graph.add_node("booking", booking_node)
     graph.add_node("calendar", calendar_node)
     graph.add_node("review_compare", review_compare_node)
+    graph.add_node("analysis", analysis_node)
     graph.add_node("response_builder", response_builder_node)
 
     # 엣지 설정
@@ -126,6 +130,7 @@ def build_graph(checkpointer: Optional[Any] = None) -> Any:
             "booking": "booking",
             "calendar": "calendar",
             "review_compare": "review_compare",
+            "analysis": "analysis",
             "general": "general",
         },
     )
@@ -142,6 +147,7 @@ def build_graph(checkpointer: Optional[Any] = None) -> Any:
         "booking",
         "calendar",
         "review_compare",
+        "analysis",
     ]:
         graph.add_edge(node_name, "response_builder")
 
