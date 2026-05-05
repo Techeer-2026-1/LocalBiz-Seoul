@@ -234,4 +234,5 @@ async def test_llm_compose_api_error() -> None:
         title, desc, details = await _llm_course_compose(_PLACES, "테스트")
 
     assert title is None
+    assert desc is None
     assert details == []

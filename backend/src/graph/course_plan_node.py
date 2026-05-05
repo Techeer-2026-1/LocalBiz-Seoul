@@ -65,7 +65,11 @@ async def _embed_query_768d(query: str, api_key: str) -> list[float]:
         resp.raise_for_status()
         data = resp.json()
 
-    return data.get("embedding", {}).get("values", [0.0] * 768)
+    values = data.get("embedding", {}).get("values")
+    if not values:
+        logger.warning("_embed_query_768d: API 응답에 embedding.values 없음 → zero vector fallback")
+        return [0.0] * 768
+    return values
 
 
 # ---------------------------------------------------------------------------
@@ -402,9 +406,19 @@ def _build_blocks(
     total_stay_min = 0
     total_transit_min = 0
 
+    # order 기준 dict lookup (LLM이 순서 바꿔 반환할 수 있음)
+    detail_by_order: dict[int, dict[str, Any]] = {}
+    for d in stop_details:
+        order = d.get("order")
+        if isinstance(order, int):
+            detail_by_order[order] = d
+    # order 키 없으면 index fallback
+    if not detail_by_order:
+        detail_by_order = {i + 1: d for i, d in enumerate(stop_details)}
+
     course_stops: list[dict[str, Any]] = []
     for i, place in enumerate(route):
-        detail = stop_details[i] if i < len(stop_details) else {}
+        detail = detail_by_order.get(i + 1, {})
 
         duration = detail.get("duration_min", _DEFAULT_DURATION_MIN)
         total_stay_min += duration
