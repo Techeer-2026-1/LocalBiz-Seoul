@@ -273,75 +273,110 @@ async def chat_stream(
                 user_blocks = [{"type": "text", "content": query}]
                 await _insert_message(pool, thread_id, "user", user_blocks)
 
-            # 3. LangGraph astream() 실행
+            # 3. 복수 intent 분류 (Gemini 1회) + LangGraph 순차 실행
+            from src.graph.intent_router_node import classify_intents  # pyright: ignore[reportMissingImports]
+
             graph = build_graph(checkpointer=None)
-            input_state: dict[str, Any] = {
-                "query": query,
-                "thread_id": thread_id,
-                "user_id": user_id,
-                "conversation_history": [],
-            }
+
+            try:
+                intents = await classify_intents(query, conversation_history=[])
+            except Exception:
+                logger.exception("classify_intents failed: thread_id=%s", thread_id)
+                intents = []
+
+            # fallback: 분류 실패 시 기존 단일 intent 동작 (intent 미주입 → intent_router가 분류)
+            if not intents:
+                intents_with_query: list[tuple[str, float, str, bool]] = [
+                    ("", 0.0, query, True)  # intent="" → 미주입, 기존 로직
+                ]
+            else:
+                intents_with_query = [
+                    (intent.value, conf, sub_q, idx == len(intents) - 1)
+                    for idx, (intent, conf, sub_q) in enumerate(intents)
+                ]
 
             assistant_blocks: list[dict[str, Any]] = []
             cancelled = False
             gemini_error = False
 
-            async for event in graph.astream(input_state):
-                if await request.is_disconnected():
-                    logger.info("Client disconnected: thread_id=%s", thread_id)
-                    cancelled = True
+            for intent_value, _conf, sub_query, is_last in intents_with_query:
+                if cancelled or gemini_error:
                     break
 
-                # event는 {node_name: node_output} 형태
-                for node_name, node_output in event.items():
-                    if not isinstance(node_output, dict):
-                        continue
+                input_state: dict[str, Any] = {
+                    "query": sub_query,
+                    "thread_id": thread_id,
+                    "user_id": user_id,
+                    "conversation_history": [],
+                }
+                # intent 주입 → intent_router_node가 classify 스킵
+                if intent_value:
+                    input_state["intent"] = intent_value
 
-                    # 노드 전환 시 status 이벤트 전송 (DB 미저장)
-                    status_msg = _NODE_STATUS_MESSAGES.get(node_name)
-                    if status_msg:
-                        yield format_status_event(status_msg, node=node_name)
+                async for event in graph.astream(input_state):
+                    if await request.is_disconnected():
+                        logger.info("Client disconnected: thread_id=%s", thread_id)
+                        cancelled = True
+                        break
 
-                    blocks = node_output.get("response_blocks", [])
-                    for block in blocks:
-                        if not isinstance(block, dict):
+                    for node_name, node_output in event.items():
+                        if not isinstance(node_output, dict):
                             continue
 
-                        block_type = block.get("type", "")
+                        status_msg = _NODE_STATUS_MESSAGES.get(node_name)
+                        if status_msg:
+                            yield format_status_event(status_msg, node=node_name)
 
-                        if block_type == "text_stream":
-                            # Gemini 토큰 스트리밍
-                            system_prompt = block.get("system", "")
-                            user_prompt = block.get("prompt", query)
-                            full_text = ""
+                        blocks = node_output.get("response_blocks", [])
+                        for block in blocks:
+                            if not isinstance(block, dict):
+                                continue
 
-                            try:
-                                async for delta in _stream_gemini(system_prompt, user_prompt):
-                                    if await request.is_disconnected():
-                                        cancelled = True
-                                        break
-                                    full_text += delta
-                                    yield format_sse_event("text_stream", {"type": "text_stream", "delta": delta})
-                            except Exception:
-                                logger.exception("Gemini streaming failed: thread_id=%s", thread_id)
-                                gemini_error = True
+                            block_type = block.get("type", "")
 
-                            # 부분이든 전체든 저장
-                            if full_text:
-                                assistant_blocks.append({"type": "text_stream", "content": full_text})
-
-                            if cancelled or gemini_error:
-                                break
-                        else:
-                            # done 블록은 루프 후에 전송 (INSERT→done 순서 보장)
+                            # done 블록: 마지막 intent만 저장, 중간은 완전 무시
                             if block_type == "done":
-                                assistant_blocks.append(block)
+                                if is_last:
+                                    assistant_blocks.append(block)
+                                continue
+
+                            if block_type == "text_stream":
+                                system_prompt = block.get("system", "")
+                                user_prompt = block.get("prompt", sub_query)
+                                full_text = ""
+
+                                try:
+                                    async for delta in _stream_gemini(system_prompt, user_prompt):
+                                        if await request.is_disconnected():
+                                            cancelled = True
+                                            break
+                                        full_text += delta
+                                        yield format_sse_event("text_stream", {"type": "text_stream", "delta": delta})
+                                except Exception:
+                                    logger.exception("Gemini streaming failed: thread_id=%s", thread_id)
+                                    gemini_error = True
+
+                                if full_text:
+                                    assistant_blocks.append({"type": "text_stream", "content": full_text})
+
+                                if cancelled or gemini_error:
+                                    break
                             else:
                                 yield format_sse_event(block_type, block)
                                 assistant_blocks.append(block)
 
-                    if cancelled or gemini_error:
-                        break
+                        if cancelled or gemini_error:
+                            break
+
+                # 중간 intent 완료 → done_partial emit (DB 미저장)
+                if not is_last and not cancelled and not gemini_error:
+                    yield format_sse_event(
+                        "done_partial",
+                        {
+                            "type": "done_partial",
+                            "completed_intent": intent_value,
+                        },
+                    )
 
             # 4. assistant 메시지 INSERT (done 전에 완료)
             persistence_success = True
