@@ -52,7 +52,7 @@ grep -B 2 -A 5 "add_node\|workflow\|graph" backend/src/graph/real_builder.py | h
 ### 3. `events` 테이블 컬럼 — 본 PR SQL이 사용
 
 확인 결과 (load_events.py INSERT_SQL 기반):
-```
+```text
 event_id (PK), title, category, place_name, address, district,
 geom (PostGIS POINT, SRID 4326),
 date_start, date_end, price, poster_url, detail_url,

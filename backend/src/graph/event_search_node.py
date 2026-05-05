@@ -8,7 +8,7 @@
   4. PG 결과 부족(<3건) → Naver 블로그 검색 API fallback (graceful degradation)
   5. response_blocks: text_stream(요약) + events[] + references[]
 
-불변식 #8: asyncpg $1,$2 바인딩
+불변식 #8: asyncpg $1,$2 바인딩 — f-string SQL 금지 (CodeRabbit #3 학습 적용)
 불변식 #13: DB 우선 → fallback (외부 API)
 불변식 #19: 사용자 query / API 키 logger 진입 금지
 
@@ -52,37 +52,47 @@ async def _search_pg(
     category: Optional[str],
     keywords: list[str],
 ) -> list[dict[str, Any]]:
-    """events 테이블에서 조건부 필터 검색. 지난 행사 제외 강제.
+    """events 테이블에서 조건부 필터 검색. date_end >= NOW() 강제.
 
     필터 전략:
       - district: 자치구 정확 매칭 ("강남구")
       - category: 카테고리 ILIKE ("%전시회%")
       - keywords: 첫 번째 키워드로 title 검색 ("%재즈%")
       - date_end >= NOW(): 지난 행사 자동 제외 (Phase 1 단순화)
+
+    SQL 구성 정책 (CodeRabbit #3 학습 적용 + 불변식 #8):
+      - f-string SQL 사용 금지
+      - placeholder는 str(len(params)) concat으로 생성
+      - 값은 항상 params 리스트로 분리 → fetch(*params)로 바인딩
     """
-    sql = (
+    base_sql = (
         "SELECT event_id, title, category, place_name, address, district, "
         "ST_Y(geom::geometry) AS lat, ST_X(geom::geometry) AS lng, "
         "date_start, date_end, price, poster_url, detail_url, summary, source "
         "FROM events WHERE date_end >= NOW()"
     )
+    conditions: list[str] = []
     params: list[Any] = []
 
     if district:
         params.append(district)
-        sql += f" AND district = ${len(params)}"
+        conditions.append("district = $" + str(len(params)))
 
     if category:
-        params.append(f"%{category}%")
-        sql += f" AND category ILIKE ${len(params)}"
+        params.append("%" + category + "%")
+        conditions.append("category ILIKE $" + str(len(params)))
 
     if keywords:
         # 키워드로 title 검색 (첫 번째만)
-        params.append(f"%{keywords[0]}%")
-        sql += f" AND title ILIKE ${len(params)}"
+        params.append("%" + keywords[0] + "%")
+        conditions.append("title ILIKE $" + str(len(params)))
+
+    sql = base_sql
+    if conditions:
+        sql = sql + " AND " + " AND ".join(conditions)
 
     params.append(_PG_LIMIT)
-    sql += f" ORDER BY date_start ASC LIMIT ${len(params)}"
+    sql = sql + " ORDER BY date_start ASC LIMIT $" + str(len(params))
 
     try:
         rows = await pool.fetch(sql, *params)
