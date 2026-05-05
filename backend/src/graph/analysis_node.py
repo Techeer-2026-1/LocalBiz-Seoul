@@ -14,6 +14,11 @@ from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
+# 불변식 #6: 6지표 키 고정 (이름·개수 변경 금지)
+_VALID_SCORE_KEYS: frozenset[str] = frozenset(
+    {"satisfaction", "accessibility", "cleanliness", "value", "atmosphere", "expertise"}
+)
+
 _ANALYSIS_SYSTEM_PROMPT = """\
 당신은 서울 로컬 라이프 AI 챗봇 'AnyWay'입니다.
 장소의 6지표(만족도/접근성/청결도/가성비/분위기/전문성) 데이터를 바탕으로
@@ -64,6 +69,10 @@ async def _fetch_place_pg(
     if len(rows) == 1:
         return dict(rows[0])
 
+    # OS 미가용 시 PG 첫 번째 row 사용
+    if os_client is None:
+        return dict(rows[0])
+
     # 동명 다중 매칭 → OS stars 최댓값 1건
     place_ids = [row["place_id"] for row in rows]
     doc_ids = [f"review_{pid}" for pid in place_ids]
@@ -108,7 +117,7 @@ async def _fetch_scores_os(
                 raw = src.get("_raw_scores", {})
                 raw_count = src.get("review_count", 0)
                 review_count = int(raw_count) if raw_count is not None else 0
-                scores = {k: float(v) for k, v in raw.items() if isinstance(v, (int, float))}
+                scores = {k: float(v) for k, v in raw.items() if k in _VALID_SCORE_KEYS and isinstance(v, (int, float))}
                 return (scores, review_count)
         return ({}, 0)
     except Exception:
@@ -173,11 +182,18 @@ async def analysis_node(state: dict[str, Any]) -> dict[str, Any]:
             ]
         }
 
-    from src.db.opensearch import get_os_client  # pyright: ignore[reportMissingImports]
     from src.db.postgres import get_pool  # pyright: ignore[reportMissingImports]
 
     pool = get_pool()
-    os_client = get_os_client()
+
+    # OS 클라이언트 — 미가용 시 PG만으로 동작 (점수 빈 값)
+    os_client: Any = None
+    try:
+        from src.db.opensearch import get_os_client  # pyright: ignore[reportMissingImports]
+
+        os_client = get_os_client()
+    except Exception:
+        logger.warning("analysis_node: OS 클라이언트 초기화 실패 → PG만으로 진행")
 
     place = await _fetch_place_pg(pool, place_name, os_client)
 
@@ -192,7 +208,10 @@ async def analysis_node(state: dict[str, Any]) -> dict[str, Any]:
             ]
         }
 
-    scores, review_count = await _fetch_scores_os(os_client, place["place_id"])
+    if os_client:
+        scores, review_count = await _fetch_scores_os(os_client, place["place_id"])
+    else:
+        scores, review_count = {}, 0
     blocks = _build_analysis_blocks(query, place, scores, review_count)
 
     return {"response_blocks": blocks}
