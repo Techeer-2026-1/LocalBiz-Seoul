@@ -181,7 +181,6 @@ async def crowdedness_node(state: dict[str, Any]) -> dict[str, Any]:
     neighborhood: Optional[str] = processed.get("neighborhood")
     district: Optional[str] = processed.get("district")
 
-
     def _no_location() -> dict[str, Any]:
         return {
             "response_blocks": [
