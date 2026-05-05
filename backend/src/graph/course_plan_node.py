@@ -75,7 +75,7 @@ def _parse_categories(query: str, pq_category: Optional[str]) -> list[str]:
     """쿼리에서 복수 카테고리 추출. "카페+맛집" → ["카페", "맛집"]."""
     categories: list[str] = []
 
-    # query에서 +, &, 와/과 구분자로 분리
+    # query에서 +, &, 와/과 구분자로 분리 — 첫 매칭 구분자만 사용
     for sep in ["+", "&", "와 ", "과 ", ", "]:
         if sep in query:
             parts = [p.strip() for p in query.split(sep)]
@@ -83,6 +83,7 @@ def _parse_categories(query: str, pq_category: Optional[str]) -> list[str]:
                 for keyword in ["카페", "맛집", "음식점", "술집", "주점", "관광지", "공원", "쇼핑", "문화시설"]:
                     if keyword in part and keyword not in categories:
                         categories.append(keyword)
+            break  # 첫 매칭 구분자로만 파싱
 
     if not categories and pq_category:
         categories = [pq_category]
@@ -191,7 +192,7 @@ async def _search_by_categories(
     seen: set[str] = set()
     merged: list[dict[str, Any]] = []
     for result in results:
-        if isinstance(result, Exception):
+        if isinstance(result, BaseException):
             logger.warning("Category search error: %s", result)
             continue
         for place in result:
@@ -441,8 +442,9 @@ def _build_blocks(
                 "category_label": place.get("category"),
                 "address": place.get("address"),
                 "district": place.get("district"),
-                "location": {"lat": place["lat"], "lng": place["lng"]} if place.get("lat") is not None else None,
-                "summary": place.get("name", ""),
+                "location": {"lat": place["lat"], "lng": place["lng"]}
+                if place.get("lat") is not None and place.get("lng") is not None
+                else None,
             },
             "transit_to_next": transit_to_next,
             "recommendation_reason": detail.get("recommendation_reason"),
@@ -466,7 +468,7 @@ def _build_blocks(
     # --- map_route 블록 ---
     markers: list[dict[str, Any]] = []
     for i, place in enumerate(route):
-        if place.get("lat") is not None:
+        if place.get("lat") is not None and place.get("lng") is not None:
             markers.append(
                 {
                     "order": i + 1,
@@ -567,7 +569,7 @@ async def course_plan_node(state: dict[str, Any]) -> dict[str, Any]:
                     "system": _COURSE_SYSTEM_PROMPT,
                     "prompt": f"사용자 질문: {query}\n\n코스를 구성할 장소를 찾지 못했습니다. 다른 지역이나 카테고리로 다시 시도해보세요.",
                 },
-                {"type": "course", "stops": [], "total_duration_min": 0},
+                {"type": "course", "course_id": str(uuid.uuid4()), "stops": [], "total_duration_min": 0},
             ]
         }
 
