@@ -144,13 +144,15 @@ async def test_build_blocks_with_results() -> None:
 
 
 async def test_build_blocks_empty() -> None:
-    """결과 없을 때 → text_stream만, 안내 메시지."""
+    """결과 없을 때 → text_stream + 빈 places 블록."""
     from src.graph.place_recommend_node import _build_blocks  # pyright: ignore[reportMissingImports]
 
     blocks = _build_blocks("없는 조건", [], {}, {})
-    assert len(blocks) == 1
+    assert len(blocks) == 2
     assert blocks[0]["type"] == "text_stream"
     assert "찾지 못했습니다" in blocks[0]["prompt"]
+    assert blocks[1]["type"] == "places"
+    assert blocks[1]["total_count"] == 0
 
 
 async def test_build_blocks_no_coordinates() -> None:

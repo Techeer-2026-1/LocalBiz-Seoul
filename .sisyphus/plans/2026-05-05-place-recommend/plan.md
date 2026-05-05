@@ -19,7 +19,7 @@ PoC 보고서 + 하이브리드 파이프라인 계획서를 기반으로 현재
 
 ### 핵심 흐름
 
-```
+```text
 processed_query (district, category, keywords, expanded_query)
   → ① PG 정형 필터 (ST_DWithin + category + is_deleted=false)
   → ② OS places_vector k-NN (expanded_query 768d 의미 검색)

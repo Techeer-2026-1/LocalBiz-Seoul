@@ -9,6 +9,7 @@
   6. 블록: text_stream + places[] + map_markers + references
 
 기획 변경: 기능 명세서 v2 "Google Places 병렬" → OS place_reviews k-NN 대체 (PM 승인).
+ST_DWithin 공간 필터는 AgentState에 user_location 추가 후 도입 예정.
 
 불변식 #2: place_id == places_vector._id
 불변식 #7: gemini-embedding-001 768d
@@ -229,11 +230,11 @@ async def _merge_candidates(
     merged: list[dict[str, Any]] = []
     need_pg_lookup: list[str] = []
 
-    # 리뷰 데이터 맵 (references 블록용)
+    # 리뷰 데이터 맵 (references 블록용) — 첫 번째 hit(최고 유사도)만 유지
     review_data_map: dict[str, dict[str, Any]] = {}
     for r in os_review_results:
         pid = r.get("place_id", "")
-        if pid:
+        if pid and pid not in review_data_map:
             review_data_map[pid] = {
                 "keywords": r.get("keywords", []),
                 "summary_text": r.get("summary_text", ""),
@@ -253,14 +254,8 @@ async def _merge_candidates(
             seen.add(pid)
             need_pg_lookup.append(pid)
 
-    # PG 결과 추가
-    for place in pg_results:
-        pid = place.get("place_id", "")
-        if pid and pid not in seen:
-            seen.add(pid)
-            merged.append(place)
-
     # PG 2차 조회: OS review에서만 나온 place_id의 상세 정보 보강
+    # review-only 후보를 PG 결과보다 앞에 배치 (리뷰 유사도 신호 보존)
     if need_pg_lookup:
         try:
             rows = await pool.fetch(
@@ -269,10 +264,20 @@ async def _merge_candidates(
                 "FROM places WHERE place_id = ANY($1::varchar[]) AND is_deleted = false",
                 need_pg_lookup,
             )
-            for row in rows:
-                merged.append(dict(row))
+            # need_pg_lookup 순서 보존 (유사도 내림차순)
+            lookup_map = {row["place_id"]: dict(row) for row in rows}
+            for pid in need_pg_lookup:
+                if pid in lookup_map:
+                    merged.append(lookup_map[pid])
         except Exception:
             logger.exception("PG 2차 보강 조회 실패")
+
+    # PG 결과 추가 (review-only 후보 뒤에 배치)
+    for place in pg_results:
+        pid = place.get("place_id", "")
+        if pid and pid not in seen:
+            seen.add(pid)
+            merged.append(place)
 
     return merged, review_data_map
 
@@ -447,14 +452,14 @@ def _build_blocks(
             item["lng"] = r["lng"]
         place_items.append(item)
 
-    if place_items:
-        blocks.append(
-            {
-                "type": "places",
-                "items": place_items,
-                "total_count": len(place_items),
-            }
-        )
+    # places 블록은 항상 반환 (빈 배열 포함 — 블록 순서 검증 일관성)
+    blocks.append(
+        {
+            "type": "places",
+            "items": place_items,
+            "total_count": len(place_items),
+        }
+    )
 
     # 3. map_markers 블록
     markers: list[dict[str, Any]] = []
