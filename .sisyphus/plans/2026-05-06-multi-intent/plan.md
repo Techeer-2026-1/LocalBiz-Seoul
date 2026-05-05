@@ -32,7 +32,7 @@ Intent #2 (EVENT_SEARCH):
 
 **DB 저장**: 전체 intent의 블록을 하나의 assistant 메시지로 INSERT (append-only, 불변식 #3).
 
-## 2. 설계 결정
+### 설계 결정
 
 ### 왜 SSE 핸들러 레벨에서 루프하는가
 
@@ -85,7 +85,7 @@ FE(`useWebSocket.ts`)에서 `done_partial` 이벤트 수신 시:
 
 → **FE 수정은 이 plan 범위 밖** (별도 이슈). BE는 `done_partial` 이벤트만 정상 emit하면 됨.
 
-## 3. 영향 범위
+## 2. 영향 범위
 
 - **수정 파일**:
   - `backend/src/graph/intent_router_node.py` — `classify_intents()` 새 함수 추가 + 노드에 intent 주입 가드
@@ -97,7 +97,7 @@ FE(`useWebSocket.ts`)에서 `done_partial` 이벤트 수신 시:
 - **외부 API 호출**: Gemini classify_intents 1회 + query_preprocessor intent별 실행 (최대 3회)
 - **query_preprocessor_node.py**: 수정 없음 (매 intent마다 sub_query로 정상 실행)
 
-## 4. 19 불변식 체크리스트
+## 3. 19 불변식 체크리스트
 
 - [x] #1 PK 이원화 — 해당 없음
 - [x] #2 PG↔OS 동기화 — 해당 없음
@@ -119,7 +119,7 @@ FE(`useWebSocket.ts`)에서 `done_partial` 이벤트 수신 시:
 - [x] #18 Phase 라벨 — P1
 - [x] #19 기획 문서 우선 — API 명세서 v2 SSE 준수
 
-## 5. 작업 순서 (Atomic step)
+## 4. 작업 순서 (Atomic step)
 
 ### g1 — classify_intents() 함수 추가 (intent_router_node.py)
 
@@ -262,7 +262,7 @@ yield format_done_event(status="done")
 
 > verify: `./validate.sh`
 
-## 6. 검증 계획
+## 5. 검증 계획
 
 - `./validate.sh` 전체 통과
 - `pytest tests/test_multi_intent.py -v` — 7개 케이스 통과
@@ -273,12 +273,12 @@ yield format_done_event(status="done")
   3. `query=카페 추천하고 맛집 찾아주고 코스 짜줘` → 3개 intent 순차 실행
   4. DB messages.blocks에 전체 블록 단일 row 저장 확인
 
-## 7. 리스크
+## 6. 리스크
 
 - **Gemini 분류 정확도**: 복수 intent 분리 + sub_query 추출이 부정확할 수 있음. "카페에서 전시회 가는 코스" → COURSE_PLAN 1개 vs PLACE_RECOMMEND + EVENT_SEARCH 2개? → 프롬프트에 "하나의 목적이면 하나의 intent" 명시
 - **응답 시간**: intent 수만큼 그래프 재실행 + query_preprocessor Gemini 호출. 3개 제한 + classify_intents는 1회만으로 방어. 최악 case: classify 1회 + preprocess 3회 + 노드별 Gemini 3회 = 7회 Gemini 호출
 - **sub_query 품질**: Gemini가 sub_query를 잘못 분리하면 query_preprocessor 결과 부정확. fallback: sub_query가 빈 문자열이면 원본 query 사용
 
-## 8. 최종 결정
+## 7. 최종 결정
 
 APPROVED — 2026-05-06 PM 승인. 런타임 시뮬레이션 + 엣지 케이스 검증 완료. 구현 진입.
