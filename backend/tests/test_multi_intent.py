@@ -15,6 +15,13 @@ import pytest
 pytestmark = pytest.mark.asyncio
 
 
+def _mock_settings() -> MagicMock:
+    """get_settings() mock — gemini_llm_api_key 설정된 상태."""
+    settings = MagicMock()
+    settings.gemini_llm_api_key = "fake-key-for-test"
+    return settings
+
+
 # ---------------------------------------------------------------------------
 # classify_intents — 단일 intent
 # ---------------------------------------------------------------------------
@@ -32,7 +39,10 @@ async def test_classify_intents_single() -> None:
     mock_llm = MagicMock()
     mock_llm.ainvoke = AsyncMock(return_value=mock_response)
 
-    with patch("langchain_google_genai.ChatGoogleGenerativeAI", return_value=mock_llm):
+    with (
+        patch("langchain_google_genai.ChatGoogleGenerativeAI", return_value=mock_llm),
+        patch("src.config.get_settings", return_value=_mock_settings()),
+    ):
         result = await classify_intents("홍대 카페 추천해줘")
 
     assert len(result) == 1
@@ -62,7 +72,10 @@ async def test_classify_intents_multi() -> None:
     mock_llm = MagicMock()
     mock_llm.ainvoke = AsyncMock(return_value=mock_response)
 
-    with patch("langchain_google_genai.ChatGoogleGenerativeAI", return_value=mock_llm):
+    with (
+        patch("langchain_google_genai.ChatGoogleGenerativeAI", return_value=mock_llm),
+        patch("src.config.get_settings", return_value=_mock_settings()),
+    ):
         result = await classify_intents("카페 추천해주고 전시회 알려줘")
 
     assert len(result) == 2
@@ -96,7 +109,10 @@ async def test_classify_intents_max_3() -> None:
     mock_llm = MagicMock()
     mock_llm.ainvoke = AsyncMock(return_value=mock_response)
 
-    with patch("langchain_google_genai.ChatGoogleGenerativeAI", return_value=mock_llm):
+    with (
+        patch("langchain_google_genai.ChatGoogleGenerativeAI", return_value=mock_llm),
+        patch("src.config.get_settings", return_value=_mock_settings()),
+    ):
         result = await classify_intents("a b c d")
 
     assert len(result) == 3
@@ -119,7 +135,10 @@ async def test_classify_intents_phase2_filter() -> None:
     mock_llm = MagicMock()
     mock_llm.ainvoke = AsyncMock(return_value=mock_response)
 
-    with patch("langchain_google_genai.ChatGoogleGenerativeAI", return_value=mock_llm):
+    with (
+        patch("langchain_google_genai.ChatGoogleGenerativeAI", return_value=mock_llm),
+        patch("src.config.get_settings", return_value=_mock_settings()),
+    ):
         result = await classify_intents("비용 알려줘")
 
     assert len(result) == 1
@@ -138,7 +157,10 @@ async def test_classify_intents_fallback() -> None:
     mock_llm = MagicMock()
     mock_llm.ainvoke = AsyncMock(side_effect=Exception("API error"))
 
-    with patch("langchain_google_genai.ChatGoogleGenerativeAI", return_value=mock_llm):
+    with (
+        patch("langchain_google_genai.ChatGoogleGenerativeAI", return_value=mock_llm),
+        patch("src.config.get_settings", return_value=_mock_settings()),
+    ):
         result = await classify_intents("테스트 쿼리")
 
     assert len(result) == 1
