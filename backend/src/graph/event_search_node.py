@@ -3,7 +3,7 @@
 검색 흐름:
   1. processed_query에서 district/category/keywords/date_reference 추출
   2. PostgreSQL: events WHERE district/category/title ILIKE
-     + date_end >= NOW() (지난 행사 자동 제외)
+     + is_deleted = FALSE (불변식 #4 소프트 삭제) + date_end >= NOW() (지난 행사 자동 제외)
   3. PG 결과 충분(>=3건) → DB 결과만 반환
   4. PG 결과 부족(<3건) → Naver 블로그 검색 API fallback (graceful degradation)
   5. response_blocks: text_stream(요약) + events[] + references[]
@@ -52,9 +52,10 @@ async def _search_pg(
     category: Optional[str],
     keywords: list[str],
 ) -> list[dict[str, Any]]:
-    """events 테이블에서 조건부 필터 검색. date_end >= NOW() 강제.
+    """events 테이블에서 조건부 필터 검색. is_deleted=FALSE + date_end >= NOW() 강제.
 
     필터 전략:
+      - is_deleted = FALSE: 소프트 삭제 행사 제외 (불변식 #4, ERD v6.3 §2 #18)
       - district: 자치구 정확 매칭 ("강남구")
       - category: 카테고리 ILIKE ("%전시회%")
       - keywords: 첫 번째 키워드로 title 검색 ("%재즈%")
@@ -69,7 +70,7 @@ async def _search_pg(
         "SELECT event_id, title, category, place_name, address, district, "
         "ST_Y(geom::geometry) AS lat, ST_X(geom::geometry) AS lng, "
         "date_start, date_end, price, poster_url, detail_url, summary, source "
-        "FROM events WHERE date_end >= NOW()"
+        "FROM events WHERE is_deleted = FALSE AND date_end >= NOW()"
     )
     conditions: list[str] = []
     params: list[Any] = []
