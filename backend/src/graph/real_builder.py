@@ -18,6 +18,7 @@ from langgraph.graph import END, StateGraph
 from src.graph.booking_node import booking_node  # pyright: ignore[reportMissingImports]
 from src.graph.calendar_node import calendar_node  # pyright: ignore[reportMissingImports]
 from src.graph.detail_inquiry_node import detail_inquiry_node  # pyright: ignore[reportMissingImports]  # noqa: F401
+from src.graph.event_recommend_node import event_recommend_node  # pyright: ignore[reportMissingImports]
 from src.graph.general_node import general_node  # pyright: ignore[reportMissingImports]
 from src.graph.intent_router_node import intent_router_node  # pyright: ignore[reportMissingImports]
 from src.graph.place_recommend_node import place_recommend_node  # pyright: ignore[reportMissingImports]  # noqa: F401
@@ -36,11 +37,6 @@ from src.graph.state import AgentState  # pyright: ignore[reportMissingImports]
 
 async def _event_search_node(state: AgentState) -> dict[str, Any]:
     """행사 검색 노드 stub (DB 우선 → Naver fallback, 불변식 #13)."""
-    return {"response_blocks": []}
-
-
-async def _event_recommend_node(state: AgentState) -> dict[str, Any]:
-    """행사 추천 노드 stub (events[] + references, EVENT_SEARCH 대칭)."""
     return {"response_blocks": []}
 
 
@@ -103,7 +99,7 @@ def build_graph(checkpointer: Optional[Any] = None) -> Any:
     graph.add_node("place_search", place_search_node)
     graph.add_node("place_recommend", place_recommend_node)
     graph.add_node("event_search", _event_search_node)
-    graph.add_node("event_recommend", _event_recommend_node)
+    graph.add_node("event_recommend", event_recommend_node)
     graph.add_node("course_plan", _course_plan_node)
     graph.add_node("general", general_node)
     graph.add_node("detail_inquiry", detail_inquiry_node)

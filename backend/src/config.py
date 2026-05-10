@@ -56,6 +56,10 @@ class Settings(BaseSettings):
     # KOPIS (공연예술통합전산망) API — P1은 URL 패턴만, 실제 API 연동은 후속 plan
     kopis_api_key: str = ""
 
+    # --- Naver Open API (event_search/event_recommend, Phase 1 fallback) ---
+    naver_client_id: str = ""
+    naver_client_secret: str = ""
+
     model_config = {
         "env_file": ".env",
         "env_file_encoding": "utf-8",
