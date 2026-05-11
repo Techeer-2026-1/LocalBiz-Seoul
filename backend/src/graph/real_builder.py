@@ -18,8 +18,8 @@ from langgraph.graph import END, StateGraph
 from src.graph.analysis_node import analysis_node  # pyright: ignore[reportMissingImports]
 from src.graph.booking_node import booking_node  # pyright: ignore[reportMissingImports]
 from src.graph.calendar_node import calendar_node  # pyright: ignore[reportMissingImports]
-from src.graph.crowdedness_node import crowdedness_node  # pyright: ignore[reportMissingImports]
 from src.graph.course_plan_node import course_plan_node  # pyright: ignore[reportMissingImports]  # noqa: F401
+from src.graph.crowdedness_node import crowdedness_node  # pyright: ignore[reportMissingImports]
 from src.graph.detail_inquiry_node import detail_inquiry_node  # pyright: ignore[reportMissingImports]  # noqa: F401
 from src.graph.event_search_node import event_search_node  # pyright: ignore[reportMissingImports]
 from src.graph.general_node import general_node  # pyright: ignore[reportMissingImports]
