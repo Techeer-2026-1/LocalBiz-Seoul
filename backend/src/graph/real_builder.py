@@ -20,6 +20,7 @@ from src.graph.booking_node import booking_node  # pyright: ignore[reportMissing
 from src.graph.calendar_node import calendar_node  # pyright: ignore[reportMissingImports]
 from src.graph.course_plan_node import course_plan_node  # pyright: ignore[reportMissingImports]  # noqa: F401
 from src.graph.detail_inquiry_node import detail_inquiry_node  # pyright: ignore[reportMissingImports]  # noqa: F401
+from src.graph.event_search_node import event_search_node  # pyright: ignore[reportMissingImports]
 from src.graph.general_node import general_node  # pyright: ignore[reportMissingImports]
 from src.graph.intent_router_node import intent_router_node  # pyright: ignore[reportMissingImports]
 from src.graph.place_recommend_node import place_recommend_node  # pyright: ignore[reportMissingImports]  # noqa: F401
@@ -34,11 +35,6 @@ from src.graph.state import AgentState  # pyright: ignore[reportMissingImports]
 # ---------------------------------------------------------------------------
 # 아직 실제 구현이 없는 노드 스텁
 # ---------------------------------------------------------------------------
-
-
-async def _event_search_node(state: AgentState) -> dict[str, Any]:
-    """행사 검색 노드 stub (DB 우선 → Naver fallback, 불변식 #13)."""
-    return {"response_blocks": []}
 
 
 async def _event_recommend_node(state: AgentState) -> dict[str, Any]:
@@ -96,12 +92,12 @@ def build_graph(checkpointer: Optional[Any] = None) -> Any:
     """
     graph = StateGraph(AgentState)
 
-    # 노드 등록 — 실제 구현 3종 + 스텁 나머지
+    # 노드 등록 — 실제 구현 5종 + 스텁 나머지
     graph.add_node("intent_router", intent_router_node)
     graph.add_node("query_preprocessor", query_preprocessor_node)
     graph.add_node("place_search", place_search_node)
     graph.add_node("place_recommend", place_recommend_node)
-    graph.add_node("event_search", _event_search_node)
+    graph.add_node("event_search", event_search_node)
     graph.add_node("event_recommend", _event_recommend_node)
     graph.add_node("course_plan", course_plan_node)
     graph.add_node("general", general_node)
