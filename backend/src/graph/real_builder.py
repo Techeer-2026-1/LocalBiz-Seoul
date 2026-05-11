@@ -15,8 +15,10 @@ from typing import Any, Optional
 
 from langgraph.graph import END, StateGraph
 
+from src.graph.analysis_node import analysis_node  # pyright: ignore[reportMissingImports]
 from src.graph.booking_node import booking_node  # pyright: ignore[reportMissingImports]
 from src.graph.calendar_node import calendar_node  # pyright: ignore[reportMissingImports]
+from src.graph.course_plan_node import course_plan_node  # pyright: ignore[reportMissingImports]  # noqa: F401
 from src.graph.detail_inquiry_node import detail_inquiry_node  # pyright: ignore[reportMissingImports]  # noqa: F401
 from src.graph.general_node import general_node  # pyright: ignore[reportMissingImports]
 from src.graph.intent_router_node import intent_router_node  # pyright: ignore[reportMissingImports]
@@ -44,11 +46,6 @@ async def _event_recommend_node(state: AgentState) -> dict[str, Any]:
     return {"response_blocks": []}
 
 
-async def _course_plan_node(state: AgentState) -> dict[str, Any]:
-    """코스 계획 노드 stub."""
-    return {"response_blocks": []}
-
-
 # ---------------------------------------------------------------------------
 # 조건부 라우팅 함수
 # ---------------------------------------------------------------------------
@@ -65,6 +62,7 @@ def _route_by_intent(state: AgentState) -> str:
         - DETAIL_INQUIRY → "detail_inquiry"
         - BOOKING → "booking"
         - CALENDAR → "calendar"
+        - ANALYSIS → "analysis"
         - GENERAL (fallback) → "general"
         - Phase 2 intents → "general" (Phase 2에서 확장)
     """
@@ -79,6 +77,7 @@ def _route_by_intent(state: AgentState) -> str:
         "BOOKING": "booking",
         "CALENDAR": "calendar",
         "REVIEW_COMPARE": "review_compare",
+        "ANALYSIS": "analysis",
     }
     return mapping.get(str(intent), "general")
 
@@ -104,12 +103,13 @@ def build_graph(checkpointer: Optional[Any] = None) -> Any:
     graph.add_node("place_recommend", place_recommend_node)
     graph.add_node("event_search", _event_search_node)
     graph.add_node("event_recommend", _event_recommend_node)
-    graph.add_node("course_plan", _course_plan_node)
+    graph.add_node("course_plan", course_plan_node)
     graph.add_node("general", general_node)
     graph.add_node("detail_inquiry", detail_inquiry_node)
     graph.add_node("booking", booking_node)
     graph.add_node("calendar", calendar_node)
     graph.add_node("review_compare", review_compare_node)
+    graph.add_node("analysis", analysis_node)
     graph.add_node("response_builder", response_builder_node)
 
     # 엣지 설정
@@ -130,6 +130,7 @@ def build_graph(checkpointer: Optional[Any] = None) -> Any:
             "booking": "booking",
             "calendar": "calendar",
             "review_compare": "review_compare",
+            "analysis": "analysis",
             "general": "general",
         },
     )
@@ -146,6 +147,7 @@ def build_graph(checkpointer: Optional[Any] = None) -> Any:
         "booking",
         "calendar",
         "review_compare",
+        "analysis",
     ]:
         graph.add_edge(node_name, "response_builder")
 

@@ -26,11 +26,12 @@ _EXPECTED_BLOCK_ORDER: dict[str, list[str]] = {
     "GENERAL": ["intent", "text_stream", "done"],
     "PLACE_SEARCH": ["intent", "text_stream", "places", "done"],
     "PLACE_RECOMMEND": ["intent", "text_stream", "places", "done"],
+    "COURSE_PLAN": ["intent", "text_stream", "course", "done"],
     "DETAIL_INQUIRY": ["intent", "text_stream", "done"],
 }
 
 # 선택적 블록 — 있어도 되고 없어도 되는 블록 (순서 검증에서 제외)
-_OPTIONAL_BLOCKS: frozenset[str] = frozenset({"map_markers", "place", "references"})
+_OPTIONAL_BLOCKS: frozenset[str] = frozenset({"map_markers", "map_route", "place", "references"})
 
 
 # ---------------------------------------------------------------------------
