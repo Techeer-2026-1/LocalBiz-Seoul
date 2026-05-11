@@ -12,6 +12,7 @@ FastAPI 앱 객체를 생성하고, 서버 시작/종료 시 DB 커넥션 풀을
 from __future__ import annotations
 
 import logging
+import logging.config
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Optional
@@ -20,6 +21,8 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
 from src.health import health_check  # pyright: ignore[reportMissingImports]
+
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
 
 logger = logging.getLogger(__name__)
 

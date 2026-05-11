@@ -9,7 +9,7 @@ from unittest.mock import MagicMock
 for _m in ["opensearchpy", "opensearchpy._async", "opensearchpy._async.client"]:
     sys.modules.setdefault(_m, MagicMock())
 
-from typing import Any  # noqa: E402
+from typing import Any, Optional  # noqa: E402
 from unittest.mock import AsyncMock, patch  # noqa: E402
 
 import pytest  # noqa: E402
@@ -26,6 +26,7 @@ import src.db.postgres  # noqa: F401, E402
 def _mock_settings(api_key: str = "test-key") -> MagicMock:
     s = MagicMock()
     s.gemini_llm_api_key = api_key
+    s.google_vision_api_key = ""
     return s
 
 
@@ -48,12 +49,14 @@ def _vision_result(
     main_candidate: Any,
     scene_description: str,
     is_identifiable: bool,
+    place_type: Optional[str] = None,
 ) -> dict[str, Any]:
     return {
         "place_candidates": candidates,
         "main_candidate": main_candidate,
         "scene_description": scene_description,
         "is_identifiable": is_identifiable,
+        "place_type": place_type,
     }
 
 
@@ -115,9 +118,10 @@ async def test_not_identifiable() -> None:
         result = await image_search_node(_STATE)
 
     blocks = result["response_blocks"]
-    assert len(blocks) == 1
-    assert blocks[0]["type"] == "text_stream"
-    assert "찾기 어려워요" in blocks[0]["prompt"]
+    assert len(blocks) == 2
+    assert blocks[0]["type"] == "vision_debug"
+    assert blocks[1]["type"] == "text_stream"
+    assert "특정하기 어렵습니다" in blocks[1]["prompt"]
 
 
 @pytest.mark.asyncio
@@ -142,9 +146,9 @@ async def test_single_place_found() -> None:
 
     blocks = result["response_blocks"]
     types = [b["type"] for b in blocks]
-    assert types == ["text_stream", "place"]
+    assert types == ["vision_debug", "text_stream", "place"]
 
-    place_block = blocks[1]
+    place_block = blocks[2]
     assert place_block["place_id"] == "uuid-001"
     assert place_block["name"] == "스타벅스 홍대점"
     assert place_block["lat"] == 37.55
@@ -173,9 +177,9 @@ async def test_disambiguation_multiple_pg_no_main() -> None:
 
     blocks = result["response_blocks"]
     types = [b["type"] for b in blocks]
-    assert types == ["text_stream", "disambiguation"]
+    assert types == ["vision_debug", "text_stream", "disambiguation"]
 
-    disam = blocks[1]
+    disam = blocks[2]
     assert len(disam["candidates"]) == 2
     names = [c["name"] for c in disam["candidates"]]
     assert "스타벅스 홍대점" in names
@@ -216,6 +220,104 @@ async def test_pg_miss_knn_fallback() -> None:
     assert "text_stream" in types
     assert "places" in types
     assert "map_markers" in types
+
+
+@pytest.mark.asyncio
+async def test_wants_identify_pg_miss_knn_fallback() -> None:
+    """wants_identify=True + PG 미스 → '정확히는 모르지만' + k-NN places 반환."""
+    from src.graph.image_search_node import image_search_node
+
+    state: dict[str, Any] = {
+        "query": "https://example.com/photo.jpg 여기 어딘지 알아?",
+        "thread_id": "t1",
+        "user_id": 1,
+    }
+
+    pool = MagicMock()
+    # _search_pg 미스, _fetch_places_by_ids 반환
+    pool.fetch = AsyncMock(side_effect=[[], [_PG_PLACE]])
+    os_client = _mock_os_client(["uuid-001"])
+
+    with (
+        patch("src.graph.image_search_node._download_image", new_callable=AsyncMock, return_value="b64fake"),
+        patch(
+            "src.graph.image_search_node._analyze_vision",
+            new_callable=AsyncMock,
+            return_value=_vision_result(["없는가게"], "없는가게", "아늑한 조명의 카페 인테리어", True),
+        ),
+        patch(
+            "src.graph.image_search_node._web_detect",
+            new_callable=AsyncMock,
+            return_value={"entities": [], "best_guess": "", "page_titles": []},
+        ),
+        patch("src.graph.image_search_node._extract_place_hint", new_callable=AsyncMock, return_value=""),
+        patch("src.config.get_settings", return_value=_mock_settings()),
+        patch("src.db.postgres.get_pool", return_value=pool),
+        patch("src.db.opensearch.get_os_client", return_value=os_client),
+        patch("src.graph.image_search_node._embed_768d", new_callable=AsyncMock, return_value=[0.1] * 768),
+    ):
+        result = await image_search_node(state)
+
+    blocks = result["response_blocks"]
+    types = [b["type"] for b in blocks]
+    # vision_debug + text_stream + places (+ 선택: map_markers)
+    assert "vision_debug" in types
+    assert "text_stream" in types
+    assert "places" in types
+    # 텍스트가 "정확한 장소를 찾지 못했지만" 포함
+    text_block = next(b for b in blocks if b["type"] == "text_stream")
+    assert "찾지 못했지만" in text_block["prompt"]
+
+
+@pytest.mark.asyncio
+async def test_google_places_fallback() -> None:
+    """PG 미스 + wants_identify=True → Google Places 히트 → text_stream + place 블록."""
+    from src.graph.image_search_node import image_search_node
+
+    state: dict[str, Any] = {
+        "query": "https://example.com/photo.jpg 여기 어딘지 알아?",
+        "thread_id": "t1",
+        "user_id": 1,
+    }
+
+    gp_place = {
+        "place_id": "gp_ChIJtest",
+        "name": "새서울 카페",
+        "category": "카페",
+        "address": "서울 마포구 홍익로 10",
+        "lat": 37.55,
+        "lng": 126.92,
+    }
+
+    pool = MagicMock()
+    pool.fetch = AsyncMock(return_value=[])  # PG 미스
+
+    with (
+        patch("src.graph.image_search_node._download_image", new_callable=AsyncMock, return_value="b64fake"),
+        patch(
+            "src.graph.image_search_node._analyze_vision",
+            new_callable=AsyncMock,
+            return_value=_vision_result(["SAESEOUL"], "SAESEOUL", "모던한 카페 인테리어", True),
+        ),
+        patch(
+            "src.graph.image_search_node._search_google_places",
+            new_callable=AsyncMock,
+            return_value=gp_place,
+        ),
+        patch("src.config.get_settings", return_value=_mock_settings()),
+        patch("src.db.postgres.get_pool", return_value=pool),
+        patch("src.db.opensearch.get_os_client", side_effect=RuntimeError("not init")),
+    ):
+        result = await image_search_node(state)
+
+    blocks = result["response_blocks"]
+    types = [b["type"] for b in blocks]
+    assert types == ["vision_debug", "text_stream", "place"]
+
+    place_block = blocks[2]
+    assert place_block["place_id"] == "gp_ChIJtest"
+    assert place_block["name"] == "새서울 카페"
+    assert place_block["lat"] == 37.55
 
 
 @pytest.mark.asyncio
