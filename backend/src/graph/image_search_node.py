@@ -300,7 +300,8 @@ async def _web_detect(b64_image: str, api_key: str) -> dict[str, Any]:
             resp.raise_for_status()
             data = resp.json()
 
-        web = data.get("responses", [{}])[0].get("webDetection", {})
+        responses = data.get("responses", [])
+        web = responses[0].get("webDetection", {}) if responses else {}
 
         # 스코어 임계값 낮춤 (0.5 → 0.3) — 장소명이 낮은 스코어로 나올 수 있음
         entities = [
@@ -367,9 +368,10 @@ async def _save_gp_place_to_db(
     try:
         # 중복 체크: 같은 이름+주소 이미 존재하면 INSERT 스킵
         existing = await pool.fetch(
-            "SELECT place_id FROM places WHERE name = $1 AND address = $2 AND is_deleted = false LIMIT 1",
+            "SELECT place_id FROM places WHERE name = $1 AND address = $2 AND source = $3 AND is_deleted = false LIMIT 1",
             name,
             address,
+            "google_places",
         )
         if existing:
             existing_id: str = existing[0]["place_id"]
@@ -836,7 +838,9 @@ async def _handle_candidates(
             gp_place = await _search_google_places(search_name, google_places_api_key)
             if gp_place:
                 # DB에 저장 (PG + OS best-effort) → 성공 시 새 UUID로 place_id 교체
-                saved_id = await _save_gp_place_to_db(pool, os_client, gp_place, scene_description, api_key, search_name=search_name)
+                saved_id = await _save_gp_place_to_db(
+                    pool, os_client, gp_place, scene_description, api_key, search_name=search_name
+                )
                 if saved_id:
                     gp_place["place_id"] = saved_id
 

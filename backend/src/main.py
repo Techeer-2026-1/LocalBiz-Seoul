@@ -12,7 +12,6 @@ FastAPI 앱 객체를 생성하고, 서버 시작/종료 시 DB 커넥션 풀을
 from __future__ import annotations
 
 import logging
-import logging.config
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 from typing import Optional

@@ -107,27 +107,59 @@ class EventsBlock(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# 7. course — 코스 타임라인
+# 7. course — 코스 타임라인 (api-course-quick-spec.md 준수, flat 패턴)
 # ---------------------------------------------------------------------------
+class CoursePlaceInfo(BaseModel):
+    """코스 stop 내 장소 정보 — 자체 완결 (FE 추가 조회 불필요)."""
+
+    place_id: str
+    name: str = ""
+    category: Optional[str] = None
+    category_label: Optional[str] = None
+    address: Optional[str] = None
+    district: Optional[str] = None
+    location: Optional[dict[str, float]] = None  # {"lat": ..., "lng": ...}
+    rating: Optional[float] = None
+    summary: Optional[str] = None
+    photo_url: Optional[str] = None  # Phase 1 생략
+    photo_attribution: Optional[str] = None  # Phase 1 생략
+    business_hours_today: Optional[str] = None  # Phase 1 생략
+    is_open_now: Optional[bool] = None  # Phase 1 생략
+    booking_url: Optional[str] = None  # Phase 1 생략
+
+
+class CourseTransit(BaseModel):
+    """경유지 간 이동 정보."""
+
+    mode: str = "walk"  # walk | subway | bus | taxi
+    mode_ko: str = "도보"
+    distance_m: int = 0
+    duration_min: int = 0
+
+
 class CourseStop(BaseModel):
-    """코스 내 단일 정거장."""
+    """코스 내 단일 정거장 — 1-indexed order."""
 
     order: int
-    place_id: str  # UUID
-    name: str = ""
-    lat: Optional[float] = None
-    lng: Optional[float] = None
-    duration_minutes: Optional[int] = None  # 체류 시간
-    memo: Optional[str] = None  # LLM 추천 사유
+    arrival_time: Optional[str] = None  # "HH:mm"
+    duration_min: Optional[int] = None
+    place: CoursePlaceInfo
+    transit_to_next: Optional[CourseTransit] = None  # 마지막 stop은 None
+    recommendation_reason: Optional[str] = None
 
 
 class CourseBlock(BaseModel):
-    """코스 타임라인 (COURSE_PLAN intent)."""
+    """코스 타임라인 (COURSE_PLAN intent). flat 패턴 — content wrapper 미적용."""
 
     type: str = "course"
+    course_id: Optional[str] = None  # UUID4
     title: Optional[str] = None
+    description: Optional[str] = None
+    total_distance_m: Optional[int] = None
+    total_duration_min: Optional[int] = None
+    total_stay_min: Optional[int] = None
+    total_transit_min: Optional[int] = None
     stops: list[CourseStop] = Field(default_factory=list)
-    total_duration_minutes: Optional[int] = None
 
 
 # ---------------------------------------------------------------------------
@@ -150,16 +182,38 @@ class MapMarkersBlock(BaseModel):
 
 
 # ---------------------------------------------------------------------------
-# 9. map_route — OSRM 폴리라인 (course 용)
+# 9. map_route — 코스 경로 시각화 (api-course-quick-spec.md 준수)
 # ---------------------------------------------------------------------------
+class RouteMarker(BaseModel):
+    """경로 마커 — course.stops[].order와 매칭."""
+
+    order: int
+    position: dict[str, float]  # {"lat": ..., "lng": ...}
+    label: str = ""
+    category: Optional[str] = None
+
+
+class RouteSegment(BaseModel):
+    """경로 구간 — straight(Phase 1) / road(Phase 2)."""
+
+    from_order: int
+    to_order: int
+    mode: str = "walk"
+    coordinates: list[list[float]] = Field(default_factory=list)  # [[lng, lat], ...] GeoJSON
+    distance_m: Optional[int] = None
+    duration_min: Optional[int] = None
+
+
 class MapRouteBlock(BaseModel):
-    """OSRM encoded polyline + 경유 좌표."""
+    """코스 경로 시각화. course_id로 CourseBlock과 연결."""
 
     type: str = "map_route"
-    polyline: Optional[str] = None
-    waypoints: Optional[list[dict[str, float]]] = None
-    distance_meters: Optional[int] = None
-    duration_seconds: Optional[int] = None
+    course_id: Optional[str] = None
+    bounds: Optional[dict[str, dict[str, float]]] = None  # {"sw": {lat,lng}, "ne": {lat,lng}}
+    center: Optional[dict[str, float]] = None  # {"lat": ..., "lng": ...}
+    suggested_zoom: Optional[int] = None
+    markers: list[RouteMarker] = Field(default_factory=list)
+    polyline: Optional[dict[str, Any]] = None  # {"type": "straight", "segments": [...]}
 
 
 # ---------------------------------------------------------------------------

@@ -27,6 +27,7 @@ def _mock_settings(api_key: str = "test-key") -> MagicMock:
     s = MagicMock()
     s.gemini_llm_api_key = api_key
     s.google_vision_api_key = ""
+    s.google_places_api_key = ""
     return s
 
 
