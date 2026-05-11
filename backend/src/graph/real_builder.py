@@ -23,6 +23,7 @@ from src.graph.detail_inquiry_node import detail_inquiry_node  # pyright: ignore
 from src.graph.event_recommend_node import event_recommend_node  # pyright: ignore[reportMissingImports]
 from src.graph.event_search_node import event_search_node  # pyright: ignore[reportMissingImports]
 from src.graph.general_node import general_node  # pyright: ignore[reportMissingImports]
+from src.graph.image_search_node import image_search_node  # pyright: ignore[reportMissingImports]
 from src.graph.intent_router_node import intent_router_node  # pyright: ignore[reportMissingImports]
 from src.graph.place_recommend_node import place_recommend_node  # pyright: ignore[reportMissingImports]  # noqa: F401
 from src.graph.place_search_node import place_search_node  # pyright: ignore[reportMissingImports]  # noqa: F401
@@ -65,6 +66,7 @@ def _route_by_intent(state: AgentState) -> str:
         "BOOKING": "booking",
         "CALENDAR": "calendar",
         "REVIEW_COMPARE": "review_compare",
+        "IMAGE_SEARCH": "image_search",
         "ANALYSIS": "analysis",
     }
     return mapping.get(str(intent), "general")
@@ -97,6 +99,7 @@ def build_graph(checkpointer: Optional[Any] = None) -> Any:
     graph.add_node("booking", booking_node)
     graph.add_node("calendar", calendar_node)
     graph.add_node("review_compare", review_compare_node)
+    graph.add_node("image_search", image_search_node)
     graph.add_node("analysis", analysis_node)
     graph.add_node("response_builder", response_builder_node)
 
@@ -118,6 +121,7 @@ def build_graph(checkpointer: Optional[Any] = None) -> Any:
             "booking": "booking",
             "calendar": "calendar",
             "review_compare": "review_compare",
+            "image_search": "image_search",
             "analysis": "analysis",
             "general": "general",
         },
@@ -135,6 +139,7 @@ def build_graph(checkpointer: Optional[Any] = None) -> Any:
         "booking",
         "calendar",
         "review_compare",
+        "image_search",
         "analysis",
     ]:
         graph.add_edge(node_name, "response_builder")

@@ -61,6 +61,10 @@ tmp/
 # state/ → 휘발성 런타임 상태 → 무시
 .sisyphus/state/
 
+# ─── 테스트 도구 (로컬 전용) ─────────────────────────────────────
+test_image_search.html
+upload_server.py
+
 # ─── 레거시 아카이브 (로컬 참조 전용) ────────────────────────────
 backend/_archive/
 

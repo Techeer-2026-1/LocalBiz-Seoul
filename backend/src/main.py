@@ -21,6 +21,8 @@ from fastapi.middleware.cors import CORSMiddleware
 
 from src.health import health_check  # pyright: ignore[reportMissingImports]
 
+logging.basicConfig(level=logging.INFO, format="%(levelname)s %(name)s: %(message)s")
+
 logger = logging.getLogger(__name__)
 
 
