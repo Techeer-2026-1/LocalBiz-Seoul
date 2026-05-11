@@ -49,6 +49,7 @@ PHASE1_INTENTS: frozenset[IntentType] = frozenset(  # pyright: ignore[reportAssi
         IntentType.CALENDAR,
         IntentType.FAVORITE,
         IntentType.REVIEW_COMPARE,
+        IntentType.CROWDEDNESS,
         IntentType.IMAGE_SEARCH,
         IntentType.ANALYSIS,
         IntentType.GENERAL,
@@ -68,6 +69,7 @@ _ROUTABLE_INTENTS: frozenset[IntentType] = frozenset(  # pyright: ignore[reportA
         IntentType.BOOKING,
         IntentType.CALENDAR,
         IntentType.REVIEW_COMPARE,
+        IntentType.CROWDEDNESS,
         IntentType.IMAGE_SEARCH,
         IntentType.ANALYSIS,
         IntentType.GENERAL,
@@ -93,6 +95,11 @@ Phase 1 (active):
 - CALENDAR: adding an event to calendar
 - FAVORITE: bookmarking or favoriting something
 - REVIEW_COMPARE: comparing two or more places by 6 metrics (satisfaction/accessibility/cleanliness/value/atmosphere/expertise)
+- CROWDEDNESS: asking about current crowdedness or population density of an area
+- GENERAL: general conversation, greetings, or anything else
+
+Phase 2 (not yet active, classify as GENERAL for now):
+- ANALYSIS, COST_ESTIMATE, IMAGE_SEARCH
 - ANALYSIS: analyzing a single place with 6 metrics (satisfaction/accessibility/cleanliness/value/atmosphere/expertise)
 - IMAGE_SEARCH: user sends an image URL (http/https link ending in image extension or storage URL) to identify a place or find similar places; also when user refers to a previously sent image ("아까 그 사진", "방금 올린 이미지", "그 사진 어딘지", "이전 사진") without a new URL
 - GENERAL: general conversation, greetings, or anything else

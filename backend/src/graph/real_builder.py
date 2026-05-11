@@ -19,6 +19,7 @@ from src.graph.analysis_node import analysis_node  # pyright: ignore[reportMissi
 from src.graph.booking_node import booking_node  # pyright: ignore[reportMissingImports]
 from src.graph.calendar_node import calendar_node  # pyright: ignore[reportMissingImports]
 from src.graph.course_plan_node import course_plan_node  # pyright: ignore[reportMissingImports]  # noqa: F401
+from src.graph.crowdedness_node import crowdedness_node  # pyright: ignore[reportMissingImports]
 from src.graph.detail_inquiry_node import detail_inquiry_node  # pyright: ignore[reportMissingImports]  # noqa: F401
 from src.graph.event_recommend_node import event_recommend_node  # pyright: ignore[reportMissingImports]
 from src.graph.event_search_node import event_search_node  # pyright: ignore[reportMissingImports]
@@ -66,6 +67,7 @@ def _route_by_intent(state: AgentState) -> str:
         "BOOKING": "booking",
         "CALENDAR": "calendar",
         "REVIEW_COMPARE": "review_compare",
+        "CROWDEDNESS": "crowdedness",
         "IMAGE_SEARCH": "image_search",
         "ANALYSIS": "analysis",
     }
@@ -99,6 +101,7 @@ def build_graph(checkpointer: Optional[Any] = None) -> Any:
     graph.add_node("booking", booking_node)
     graph.add_node("calendar", calendar_node)
     graph.add_node("review_compare", review_compare_node)
+    graph.add_node("crowdedness", crowdedness_node)
     graph.add_node("image_search", image_search_node)
     graph.add_node("analysis", analysis_node)
     graph.add_node("response_builder", response_builder_node)
@@ -121,6 +124,7 @@ def build_graph(checkpointer: Optional[Any] = None) -> Any:
             "booking": "booking",
             "calendar": "calendar",
             "review_compare": "review_compare",
+            "crowdedness": "crowdedness",
             "image_search": "image_search",
             "analysis": "analysis",
             "general": "general",
@@ -139,6 +143,7 @@ def build_graph(checkpointer: Optional[Any] = None) -> Any:
         "booking",
         "calendar",
         "review_compare",
+        "crowdedness",
         "image_search",
         "analysis",
     ]:
