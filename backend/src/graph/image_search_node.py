@@ -45,6 +45,8 @@ logger = logging.getLogger(__name__)
 _MAX_IMAGE_BYTES = 10 * 1024 * 1024  # 10 MB
 _OS_TOP_K = 5
 _OS_MIN_SCORE = 0.5
+_WEB_ENTITY_MIN_SCORE = 0.3  # 장소명이 낮은 스코어로 검출될 수 있어 0.5보다 낮게 설정
+_BRANCH_MATCH_RATIO = 0.6  # candidate가 DB명의 60% 이상이면 같은 장소로 간주
 
 _VISION_SYSTEM_PROMPT = """\
 당신은 서울 로컬 장소 검색 시스템의 이미지 분석 AI입니다.
@@ -305,7 +307,9 @@ async def _web_detect(b64_image: str, api_key: str) -> dict[str, Any]:
 
         # 스코어 임계값 낮춤 (0.5 → 0.3) — 장소명이 낮은 스코어로 나올 수 있음
         entities = [
-            e["description"] for e in web.get("webEntities", []) if e.get("score", 0) > 0.3 and e.get("description")
+            e["description"]
+            for e in web.get("webEntities", [])
+            if e.get("score", 0) > _WEB_ENTITY_MIN_SCORE and e.get("description")
         ]
         guesses = [lb["label"] for lb in web.get("bestGuessLabels", []) if lb.get("label")]
 
@@ -802,7 +806,7 @@ async def _handle_candidates(
         def _is_acceptable(place_name: str) -> bool:
             name_lower = place_name.lower()
             # 비율 기준 통과 (60% 이상)
-            if len(cand_lower) / max(len(name_lower), 1) >= 0.6:
+            if len(cand_lower) / max(len(name_lower), 1) >= _BRANCH_MATCH_RATIO:
                 return True
             # 지점명 suffix 허용: prefix가 candidate이고 suffix가 지점 패턴
             if name_lower.startswith(cand_lower):
