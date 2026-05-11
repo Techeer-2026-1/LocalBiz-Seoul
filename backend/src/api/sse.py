@@ -105,8 +105,7 @@ _NODE_STATUS_MESSAGES: dict[str, str] = {
     "general": "답변을 생성하고 있어요...",
     "detail_inquiry": "상세 정보를 조회하고 있어요...",
     "booking": "예약 정보를 확인하고 있어요...",
-    "calendar": "일정을 추가하고 있어요...",
-    "crowdedness": "혼잡도를 분석하고 있어요...",
+    "calendar": "일정을 추가하고 있어요..."
 }
 
 
