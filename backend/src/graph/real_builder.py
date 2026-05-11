@@ -15,12 +15,16 @@ from typing import Any, Optional
 
 from langgraph.graph import END, StateGraph
 
+from src.graph.analysis_node import analysis_node  # pyright: ignore[reportMissingImports]
 from src.graph.booking_node import booking_node  # pyright: ignore[reportMissingImports]
 from src.graph.calendar_node import calendar_node  # pyright: ignore[reportMissingImports]
 from src.graph.crowdedness_node import crowdedness_node  # pyright: ignore[reportMissingImports]
+from src.graph.course_plan_node import course_plan_node  # pyright: ignore[reportMissingImports]  # noqa: F401
 from src.graph.detail_inquiry_node import detail_inquiry_node  # pyright: ignore[reportMissingImports]  # noqa: F401
+from src.graph.event_search_node import event_search_node  # pyright: ignore[reportMissingImports]
 from src.graph.general_node import general_node  # pyright: ignore[reportMissingImports]
 from src.graph.intent_router_node import intent_router_node  # pyright: ignore[reportMissingImports]
+from src.graph.place_recommend_node import place_recommend_node  # pyright: ignore[reportMissingImports]  # noqa: F401
 from src.graph.place_search_node import place_search_node  # pyright: ignore[reportMissingImports]  # noqa: F401
 from src.graph.query_preprocessor_node import (  # pyright: ignore[reportMissingImports]  # noqa: F401
     query_preprocessor_node,
@@ -34,23 +38,8 @@ from src.graph.state import AgentState  # pyright: ignore[reportMissingImports]
 # ---------------------------------------------------------------------------
 
 
-async def _place_recommend_node(state: AgentState) -> dict[str, Any]:
-    """장소 추천 노드 stub."""
-    return {"response_blocks": []}
-
-
-async def _event_search_node(state: AgentState) -> dict[str, Any]:
-    """행사 검색 노드 stub (DB 우선 → Naver fallback, 불변식 #13)."""
-    return {"response_blocks": []}
-
-
 async def _event_recommend_node(state: AgentState) -> dict[str, Any]:
     """행사 추천 노드 stub (events[] + references, EVENT_SEARCH 대칭)."""
-    return {"response_blocks": []}
-
-
-async def _course_plan_node(state: AgentState) -> dict[str, Any]:
-    """코스 계획 노드 stub."""
     return {"response_blocks": []}
 
 
@@ -70,6 +59,7 @@ def _route_by_intent(state: AgentState) -> str:
         - DETAIL_INQUIRY → "detail_inquiry"
         - BOOKING → "booking"
         - CALENDAR → "calendar"
+        - ANALYSIS → "analysis"
         - GENERAL (fallback) → "general"
         - Phase 2 intents → "general" (Phase 2에서 확장)
     """
@@ -85,6 +75,7 @@ def _route_by_intent(state: AgentState) -> str:
         "CALENDAR": "calendar",
         "REVIEW_COMPARE": "review_compare",
         "CROWDEDNESS": "crowdedness",
+        "ANALYSIS": "analysis",
     }
     return mapping.get(str(intent), "general")
 
@@ -103,20 +94,21 @@ def build_graph(checkpointer: Optional[Any] = None) -> Any:
     """
     graph = StateGraph(AgentState)
 
-    # 노드 등록 — 실제 구현 3종 + 스텁 나머지
+    # 노드 등록 — 실제 구현 5종 + 스텁 나머지
     graph.add_node("intent_router", intent_router_node)
     graph.add_node("query_preprocessor", query_preprocessor_node)
     graph.add_node("place_search", place_search_node)
-    graph.add_node("place_recommend", _place_recommend_node)
-    graph.add_node("event_search", _event_search_node)
+    graph.add_node("place_recommend", place_recommend_node)
+    graph.add_node("event_search", event_search_node)
     graph.add_node("event_recommend", _event_recommend_node)
-    graph.add_node("course_plan", _course_plan_node)
+    graph.add_node("course_plan", course_plan_node)
     graph.add_node("general", general_node)
     graph.add_node("detail_inquiry", detail_inquiry_node)
     graph.add_node("booking", booking_node)
     graph.add_node("calendar", calendar_node)
     graph.add_node("review_compare", review_compare_node)
     graph.add_node("crowdedness", crowdedness_node)
+    graph.add_node("analysis", analysis_node)
     graph.add_node("response_builder", response_builder_node)
 
     # 엣지 설정
@@ -138,6 +130,7 @@ def build_graph(checkpointer: Optional[Any] = None) -> Any:
             "calendar": "calendar",
             "review_compare": "review_compare",
             "crowdedness": "crowdedness",
+            "analysis": "analysis",
             "general": "general",
         },
     )
@@ -155,6 +148,7 @@ def build_graph(checkpointer: Optional[Any] = None) -> Any:
         "calendar",
         "review_compare",
         "crowdedness",
+        "analysis",
     ]:
         graph.add_edge(node_name, "response_builder")
 

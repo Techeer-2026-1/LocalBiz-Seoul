@@ -48,6 +48,10 @@ class Settings(BaseSettings):
     # --- Google OAuth (Auth #5 Google 로그인 PR에서 사용 예정) ---
     google_client_id: str = ""
 
+    # --- Naver Open API (event_search_node — DB fallback 검색) ---
+    naver_client_id: str = ""
+    naver_client_secret: str = ""
+
     # --- External APIs (booking_node) ---
     # Google Places Text Search v1 — 음식점/카페/주점 예약 URL 조회
     google_places_api_key: str = ""
