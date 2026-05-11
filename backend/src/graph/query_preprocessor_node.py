@@ -15,8 +15,8 @@ from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
-# 전처리 생략 대상 intent (검색 아닌 대화형)
-_SKIP_INTENTS: frozenset[str] = frozenset({"GENERAL"})
+# 전처리 생략 대상 intent — GENERAL(대화형) + IMAGE_SEARCH(URL 쿼리, 이미지 노드가 직접 파싱)
+_SKIP_INTENTS: frozenset[str] = frozenset({"GENERAL", "IMAGE_SEARCH"})
 
 _PREPROCESS_SYSTEM_PROMPT = """\
 You are a query preprocessor for a Seoul local-life AI chatbot.

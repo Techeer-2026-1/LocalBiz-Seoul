@@ -106,6 +106,7 @@ _NODE_STATUS_MESSAGES: dict[str, str] = {
     "detail_inquiry": "상세 정보를 조회하고 있어요...",
     "booking": "예약 정보를 확인하고 있어요...",
     "calendar": "일정을 추가하고 있어요...",
+    "image_search": "이미지를 분석하고 있어요...",
     "review_compare": "장소를 비교하고 있어요...",
     "analysis": "장소를 분석하고 있어요...",
 }
@@ -361,6 +362,9 @@ async def chat_stream(
 
                                 if cancelled or gemini_error:
                                     break
+                            elif block_type == "vision_debug":
+                                # 디버그 전용 — SSE 전송만, messages 미저장
+                                yield format_sse_event(block_type, block)
                             else:
                                 yield format_sse_event(block_type, block)
                                 assistant_blocks.append(block)

@@ -55,6 +55,7 @@ class Settings(BaseSettings):
     # --- External APIs (booking_node) ---
     # Google Places Text Search v1 — 음식점/카페/주점 예약 URL 조회
     google_places_api_key: str = ""
+    google_vision_api_key: str = ""
     # 서울시 공공서비스예약 API — P1은 URL 패턴만, 실제 API 연동은 후속 plan
     seoul_public_api_key: str = ""
     # KOPIS (공연예술통합전산망) API — P1은 URL 패턴만, 실제 API 연동은 후속 plan

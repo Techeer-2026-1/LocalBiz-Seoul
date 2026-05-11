@@ -50,6 +50,7 @@ PHASE1_INTENTS: frozenset[IntentType] = frozenset(  # pyright: ignore[reportAssi
         IntentType.FAVORITE,
         IntentType.REVIEW_COMPARE,
         IntentType.CROWDEDNESS,
+        IntentType.IMAGE_SEARCH,
         IntentType.ANALYSIS,
         IntentType.GENERAL,
     }
@@ -69,6 +70,7 @@ _ROUTABLE_INTENTS: frozenset[IntentType] = frozenset(  # pyright: ignore[reportA
         IntentType.CALENDAR,
         IntentType.REVIEW_COMPARE,
         IntentType.CROWDEDNESS,
+        IntentType.IMAGE_SEARCH,
         IntentType.ANALYSIS,
         IntentType.GENERAL,
     }
@@ -99,10 +101,11 @@ Phase 1 (active):
 Phase 2 (not yet active, classify as GENERAL for now):
 - ANALYSIS, COST_ESTIMATE, IMAGE_SEARCH
 - ANALYSIS: analyzing a single place with 6 metrics (satisfaction/accessibility/cleanliness/value/atmosphere/expertise)
+- IMAGE_SEARCH: user sends an image URL (http/https link ending in image extension or storage URL) to identify a place or find similar places; also when user refers to a previously sent image ("아까 그 사진", "방금 올린 이미지", "그 사진 어딘지", "이전 사진") without a new URL
 - GENERAL: general conversation, greetings, or anything else
 
 Phase 2 (not yet active, classify as GENERAL for now):
-- COST_ESTIMATE, CROWDEDNESS, IMAGE_SEARCH
+- COST_ESTIMATE, CROWDEDNESS
 
 Respond in JSON: {"intent": "INTENT_NAME", "confidence": 0.0-1.0}
 """
@@ -124,10 +127,11 @@ Phase 1 (active):
 - FAVORITE: bookmarking or favoriting something
 - REVIEW_COMPARE: comparing two or more places by 6 metrics
 - ANALYSIS: analyzing a single place with 6 metrics
+- IMAGE_SEARCH: user sends an image URL to identify a place or find similar places; also when user refers to a previously sent image without a new URL
 - GENERAL: general conversation, greetings, or anything else
 
 Phase 2 (not yet active, classify as GENERAL for now):
-- COST_ESTIMATE, CROWDEDNESS, IMAGE_SEARCH
+- COST_ESTIMATE, CROWDEDNESS
 
 Rules:
 - If the query has ONE purpose, return ONE intent. Example: "카페에서 전시회 가는 코스" → COURSE_PLAN only.
