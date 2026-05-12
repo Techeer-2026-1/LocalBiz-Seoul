@@ -1,25 +1,29 @@
 #!/usr/bin/env bash
-# AnyWay API — GCE Nginx + Let's Encrypt 1회성 셋업
+# AnyWay API — GCE Nginx + Let's Encrypt 1회성 셋업 (nip.io)
 #
 # 사용법:
-#   sudo bash deploy/nginx/setup.sh <도메인>
+#   sudo bash deploy/nginx/setup.sh
 #
 # 전제조건:
-#   1. 도메인 A 레코드 → 이 서버의 외부 IP
-#   2. GCE 방화벽 80/443 인바운드 허용
+#   1. GCE 방화벽 80/443 인바운드 허용
 #      gcloud compute firewall-rules create allow-http-https \
 #        --allow tcp:80,tcp:443 --target-tags=http-server
-#   3. 이 스크립트를 root 또는 sudo로 실행
+#   2. 이 스크립트를 root 또는 sudo로 실행
 
 set -euo pipefail
 
-DOMAIN="${1:?Usage: sudo bash setup.sh <domain>}"
+# GCE 외부 IP 자동 감지 → nip.io 도메인 생성
+EXTERNAL_IP=$(curl -sf http://metadata.google.internal/computeMetadata/v1/instance/network-interfaces/0/access-configs/0/external-ip -H "Metadata-Flavor: Google" 2>/dev/null \
+    || curl -sf https://ifconfig.me)
+DOMAIN="${EXTERNAL_IP}.nip.io"
+
 REPO_DIR="$(cd "$(dirname "$0")/../.." && pwd)"
 CONF_SRC="${REPO_DIR}/deploy/nginx/anyway-api.conf"
 
-echo "=== AnyWay Nginx SSL Setup ==="
-echo "Domain: ${DOMAIN}"
-echo "Repo:   ${REPO_DIR}"
+echo "=== AnyWay Nginx SSL Setup (nip.io) ==="
+echo "External IP: ${EXTERNAL_IP}"
+echo "Domain:      ${DOMAIN}"
+echo "Repo:        ${REPO_DIR}"
 echo ""
 
 # 1. nginx + certbot 설치
@@ -32,13 +36,13 @@ echo "[2/5] Creating certbot webroot..."
 mkdir -p /var/www/certbot
 
 # 3. 인증서 발급 (standalone — nginx 아직 미설정)
-echo "[3/5] Issuing SSL certificate..."
+echo "[3/5] Issuing SSL certificate for ${DOMAIN}..."
 systemctl stop nginx || true
 certbot certonly --standalone -d "${DOMAIN}" --non-interactive --agree-tos --register-unsafely-without-email
 
 # 4. nginx 설정 배포
 echo "[4/5] Deploying nginx config..."
-sed "s/DOMAIN_PLACEHOLDER/${DOMAIN}/g" "${CONF_SRC}" > /etc/nginx/sites-available/anyway-api.conf
+cp "${CONF_SRC}" /etc/nginx/sites-available/anyway-api.conf
 ln -sf /etc/nginx/sites-available/anyway-api.conf /etc/nginx/sites-enabled/anyway-api.conf
 rm -f /etc/nginx/sites-enabled/default
 nginx -t
@@ -58,5 +62,8 @@ fi
 
 echo ""
 echo "=== Setup complete ==="
-echo "Verify: curl -I https://${DOMAIN}"
-echo "SSE:    curl -N https://${DOMAIN}/api/v1/chat/stream"
+echo "Verify:  curl -I https://${DOMAIN}"
+echo "SSE:     curl -N https://${DOMAIN}/api/v1/chat/stream"
+echo ""
+echo "프론트엔드 환경변수:"
+echo "  NEXT_PUBLIC_API_URL=https://${DOMAIN}"
