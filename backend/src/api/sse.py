@@ -113,30 +113,8 @@ _NODE_STATUS_MESSAGES: dict[str, str] = {
 
 
 # ---------------------------------------------------------------------------
-# DB 헬퍼 — seed user, conversations, messages
+# DB 헬퍼 — conversations, messages
 # ---------------------------------------------------------------------------
-async def _ensure_seed_user(pool: Any) -> int:
-    """개발용 seed user 보장. user_id=1 없으면 INSERT.
-
-    Returns:
-        user_id (int).
-    """
-    row = await pool.fetchrow("SELECT user_id FROM users WHERE user_id = $1", 1)
-    if row:
-        return int(row["user_id"])
-
-    await pool.execute(
-        "INSERT INTO users (user_id, email, auth_provider, password_hash) "
-        "VALUES ($1, $2, $3, $4) ON CONFLICT (user_id) DO NOTHING",
-        1,
-        "dev@localhost",
-        "email",
-        "dev_placeholder_hash",
-    )
-    logger.info("Seed user created: user_id=1, email=dev@localhost")
-    return 1
-
-
 async def _ensure_conversation(pool: Any, thread_id: str, user_id: int) -> None:
     """conversations 테이블에 thread_id가 없으면 auto-create.
 
@@ -231,7 +209,24 @@ async def chat_stream(
         )
 
         try:
-            # 1. DB 준비 — seed user + conversation
+            # 0. JWT 인증 — token query parameter에서 user_id 추출
+            if not token:
+                yield format_error_event("AUTH_MISSING", "인증 토큰이 필요합니다.", recoverable=False)
+                yield format_done_event(status="error", error_message="인증 토큰이 필요합니다.")
+                return
+
+            try:
+                from src.core.security import decode_access_token  # pyright: ignore[reportMissingImports]
+
+                payload = decode_access_token(token)
+                user_id = int(payload["sub"])
+            except Exception:
+                logger.info("SSE JWT decode failed: thread_id=%s", thread_id)
+                yield format_error_event("AUTH_INVALID", "유효하지 않은 인증 토큰입니다.", recoverable=False)
+                yield format_done_event(status="error", error_message="유효하지 않은 인증 토큰입니다.")
+                return
+
+            # 1. DB 준비 — conversation auto-create
             try:
                 pool = get_pool()
             except RuntimeError:
@@ -240,7 +235,6 @@ async def chat_stream(
                 yield format_done_event(status="error", error_message="서버 DB 연결에 실패했습니다.")
                 return
 
-            user_id = await _ensure_seed_user(pool)
             await _ensure_conversation(pool, thread_id, user_id)
 
             # 2. user 메시지 INSERT (retry 시 생략)
