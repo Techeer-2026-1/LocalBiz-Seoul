@@ -26,5 +26,6 @@ jobs:
             _upsert_env "GOOGLE_CALENDAR_CLIENT_ID" "${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}"
             _upsert_env "GOOGLE_CALENDAR_CLIENT_SECRET" "${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}"
             _upsert_env "GOOGLE_CALENDAR_REDIRECT_URI" "${{ secrets.GOOGLE_CALENDAR_REDIRECT_URI }}"
+            if [ -n "${{ secrets.FRONTEND_BASE_URL }}" ]; then _upsert_env "FRONTEND_BASE_URL" "${{ secrets.FRONTEND_BASE_URL }}"; fi
             sudo systemctl restart localbiz-api
             if command -v nginx >/dev/null 2>&1; then sudo nginx -t && sudo systemctl reload nginx; fi

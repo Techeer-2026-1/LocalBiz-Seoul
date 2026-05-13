@@ -14,10 +14,11 @@ import hmac
 import logging
 import time
 from typing import Optional
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
+from fastapi.responses import RedirectResponse
 
 from src.api.deps import get_current_user_id  # pyright: ignore[reportMissingImports]
 from src.config import get_settings  # pyright: ignore[reportMissingImports]
@@ -104,27 +105,41 @@ async def google_calendar_auth_url(
     return {"auth_url": auth_url}
 
 
+def _calendar_redirect(base_url: str, error: Optional[str] = None) -> RedirectResponse:
+    """FE /calendar/connected 페이지로 302 리다이렉트. 에러 시 ?error= 쿼리 추가."""
+    url = f"{base_url}/calendar/connected"
+    if error:
+        url = f"{url}?error={quote(error, safe='')}"
+    return RedirectResponse(url=url, status_code=302)
+
+
 @router.get("/calendar/callback")
 async def google_calendar_callback(
     code: Optional[str] = Query(None),
     state: Optional[str] = Query(None),
     error: Optional[str] = Query(None),
-) -> dict[str, str]:
-    """Google OAuth 콜백 — code 수신 → refresh_token 저장.
+) -> RedirectResponse:
+    """Google OAuth 콜백 — code 수신 → refresh_token 저장 → FE redirect.
 
     구글이 직접 호출하는 엔드포인트. JWT 인증 없음.
     user_id는 state 파라미터 서명 검증으로 추출.
+    성공/실패 모두 FE /calendar/connected 페이지로 redirect.
     """
-    if error:
-        raise HTTPException(status_code=400, detail=f"구글 인증 거부: {error}")
-    if not code or not state:
-        raise HTTPException(status_code=400, detail="code 또는 state 파라미터가 없습니다.")
-
     settings = get_settings()
-    if not settings.jwt_secret:
-        raise HTTPException(status_code=503, detail="서버 설정 오류: JWT 시크릿 미설정.")
+    base_url = settings.frontend_base_url
 
-    user_id = _verify_state(state, settings.jwt_secret)
+    if error:
+        return _calendar_redirect(base_url, error=error)
+    if not code or not state:
+        return _calendar_redirect(base_url, error="invalid_request")
+
+    if not settings.jwt_secret:
+        return _calendar_redirect(base_url, error="server_error")
+
+    try:
+        user_id = _verify_state(state, settings.jwt_secret)
+    except HTTPException:
+        return _calendar_redirect(base_url, error="invalid_state")
 
     async with httpx.AsyncClient(timeout=10.0) as client:
         resp = await client.post(
@@ -144,15 +159,12 @@ async def google_calendar_callback(
             resp.status_code,
             resp.text[:200],
         )
-        raise HTTPException(status_code=400, detail="Google 인증 코드 교환에 실패했습니다.")
+        return _calendar_redirect(base_url, error="token_exchange_failed")
 
     token_data = resp.json()
     refresh_token: Optional[str] = token_data.get("refresh_token")
     if not refresh_token:
-        raise HTTPException(
-            status_code=400,
-            detail="refresh_token을 받지 못했습니다. prompt=consent가 필요합니다.",
-        )
+        return _calendar_redirect(base_url, error="no_refresh_token")
 
     pool = get_pool()
     async with pool.acquire() as conn:
@@ -172,4 +184,4 @@ async def google_calendar_callback(
 
     clear_token_cache(user_id)
     logger.info("google_calendar_callback: user_id=%d calendar OAuth 완료", user_id)
-    return {"message": "Google Calendar 연동이 완료되었습니다."}
+    return _calendar_redirect(base_url)
