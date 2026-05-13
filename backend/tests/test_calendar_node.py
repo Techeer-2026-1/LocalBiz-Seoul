@@ -71,13 +71,13 @@ async def test_missing_event_title_returns_error() -> None:
         result = await calendar_node(state)  # type: ignore[arg-type]
 
     blocks = result["response_blocks"]
-    assert blocks[0]["type"] == "error"
-    assert "제목" in blocks[0]["message"]
+    assert blocks[0]["type"] == "text_stream"
+    assert "제목" in blocks[0]["prompt"]
 
 
 @pytest.mark.asyncio
 async def test_missing_start_time_returns_error() -> None:
-    """start_time 추출 실패 시 재질문 error 블록 반환."""
+    """start_time 추출 실패 시 재질문 text_stream 블록 반환."""
     with patch(_EXTRACT_PATH, new=AsyncMock(return_value={"event_title": "경복궁 방문"})):
         state: dict[str, Any] = {
             "user_id": 1,
@@ -87,13 +87,13 @@ async def test_missing_start_time_returns_error() -> None:
         result = await calendar_node(state)  # type: ignore[arg-type]
 
     blocks = result["response_blocks"]
-    assert blocks[0]["type"] == "error"
-    assert "시작" in blocks[0]["message"]
+    assert blocks[0]["type"] == "text_stream"
+    assert "시작" in blocks[0]["prompt"]
 
 
 @pytest.mark.asyncio
 async def test_extract_failure_returns_re_ask_error() -> None:
-    """_extract_calendar_fields 빈 dict 반환 시 재질문 error 블록 반환."""
+    """_extract_calendar_fields 빈 dict 반환 시 재질문 text_stream 블록 반환."""
     with patch(_EXTRACT_PATH, new=AsyncMock(return_value={})):
         state: dict[str, Any] = {
             "user_id": 1,
@@ -103,9 +103,8 @@ async def test_extract_failure_returns_re_ask_error() -> None:
         result = await calendar_node(state)  # type: ignore[arg-type]
 
     blocks = result["response_blocks"]
-    assert blocks[0]["type"] == "error"
-    # event_title 없음 → 제목 재질문
-    assert "제목" in blocks[0]["message"]
+    assert blocks[0]["type"] == "text_stream"
+    assert "제목" in blocks[0]["prompt"]
 
 
 # ---------------------------------------------------------------------------
