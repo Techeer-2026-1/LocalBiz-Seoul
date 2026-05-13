@@ -27,6 +27,8 @@ from src.api.google_calendar_auth import (
 
 _SECRET = "test-jwt-secret"
 _USER_ID = 42
+_FRONTEND_URL = "https://seoul-ai-guide.vercel.app"
+_CONNECTED_URL = f"{_FRONTEND_URL}/calendar/connected"
 
 
 # ---------------------------------------------------------------------------
@@ -96,6 +98,7 @@ def _settings_mock(jwt_secret: str = _SECRET) -> Any:
     m.jwt_secret = jwt_secret
     m.google_calendar_client_id = "test-client-id"
     m.google_calendar_redirect_uri = "http://localhost:8000/api/v1/auth/google/calendar/callback"
+    m.frontend_base_url = _FRONTEND_URL
     return m
 
 
@@ -133,7 +136,7 @@ async def test_auth_url_no_client_id_raises_503() -> None:
 
 
 # ---------------------------------------------------------------------------
-# GET /api/v1/auth/google/calendar/callback — code 교환 → upsert
+# GET /api/v1/auth/google/calendar/callback — code 교환 → upsert → redirect
 # ---------------------------------------------------------------------------
 
 
@@ -152,8 +155,8 @@ def _make_valid_state() -> str:
 
 
 @pytest.mark.asyncio
-async def test_callback_success_upserts_token() -> None:
-    """정상 code + valid state → user_oauth_tokens upsert 후 200 반환."""
+async def test_callback_success_redirects_to_connected_page() -> None:
+    """정상 code + valid state → upsert 후 /calendar/connected 로 redirect."""
     pool = _pool_mock()
     state = _make_valid_state()
 
@@ -168,7 +171,8 @@ async def test_callback_success_upserts_token() -> None:
 
         result = await google_calendar_callback(code="auth-code", state=state, error=None)
 
-    assert result == {"message": "Google Calendar 연동이 완료되었습니다."}
+    assert result.status_code == 302
+    assert result.headers["location"] == _CONNECTED_URL
 
     conn = pool.acquire().__aenter__.return_value
     conn.execute.assert_awaited_once()
@@ -179,8 +183,39 @@ async def test_callback_success_upserts_token() -> None:
 
 
 @pytest.mark.asyncio
-async def test_callback_token_exchange_failure_raises_400() -> None:
-    """code 교환 실패 (구글 400) → 400."""
+async def test_callback_error_param_redirects_with_error() -> None:
+    """구글이 error 파라미터 전달 (사용자 거부) → ?error=access_denied redirect."""
+    with patch("src.api.google_calendar_auth.get_settings", return_value=_settings_mock()):
+        result = await google_calendar_callback(code=None, state=None, error="access_denied")
+
+    assert result.status_code == 302
+    assert "error=access_denied" in result.headers["location"]
+
+
+@pytest.mark.asyncio
+async def test_callback_missing_code_redirects_with_invalid_request() -> None:
+    """code 파라미터 없음 → ?error=invalid_request redirect."""
+    state = _make_valid_state()
+    with patch("src.api.google_calendar_auth.get_settings", return_value=_settings_mock()):
+        result = await google_calendar_callback(code=None, state=state, error=None)
+
+    assert result.status_code == 302
+    assert "error=invalid_request" in result.headers["location"]
+
+
+@pytest.mark.asyncio
+async def test_callback_invalid_state_redirects_with_invalid_state() -> None:
+    """위조된 state → ?error=invalid_state redirect."""
+    with patch("src.api.google_calendar_auth.get_settings", return_value=_settings_mock()):
+        result = await google_calendar_callback(code="auth-code", state=f"1:{int(time.time())}:fakesig", error=None)
+
+    assert result.status_code == 302
+    assert "error=invalid_state" in result.headers["location"]
+
+
+@pytest.mark.asyncio
+async def test_callback_token_exchange_failure_redirects_with_error() -> None:
+    """code 교환 실패 (구글 400) → ?error=token_exchange_failed redirect."""
     state = _make_valid_state()
 
     with (
@@ -192,15 +227,15 @@ async def test_callback_token_exchange_failure_raises_400() -> None:
             return_value=Response(400, json={"error": "invalid_grant"})
         )
 
-        with pytest.raises(HTTPException) as exc:
-            await google_calendar_callback(code="bad-code", state=state, error=None)
+        result = await google_calendar_callback(code="bad-code", state=state, error=None)
 
-    assert exc.value.status_code == 400
+    assert result.status_code == 302
+    assert "error=token_exchange_failed" in result.headers["location"]
 
 
 @pytest.mark.asyncio
-async def test_callback_no_refresh_token_raises_400() -> None:
-    """구글이 refresh_token 없이 응답 → 400 (prompt=consent 미적용 케이스)."""
+async def test_callback_no_refresh_token_redirects_with_error() -> None:
+    """구글이 refresh_token 없이 응답 → ?error=no_refresh_token redirect."""
     state = _make_valid_state()
 
     with (
@@ -212,35 +247,7 @@ async def test_callback_no_refresh_token_raises_400() -> None:
             return_value=Response(200, json={"access_token": "at-only"})
         )
 
-        with pytest.raises(HTTPException) as exc:
-            await google_calendar_callback(code="auth-code", state=state, error=None)
+        result = await google_calendar_callback(code="auth-code", state=state, error=None)
 
-    assert exc.value.status_code == 400
-
-
-@pytest.mark.asyncio
-async def test_callback_missing_code_raises_400() -> None:
-    """code 파라미터 없음 → 400."""
-    state = _make_valid_state()
-    with patch("src.api.google_calendar_auth.get_settings", return_value=_settings_mock()):
-        with pytest.raises(HTTPException) as exc:
-            await google_calendar_callback(code=None, state=state, error=None)
-    assert exc.value.status_code == 400
-
-
-@pytest.mark.asyncio
-async def test_callback_error_param_raises_400() -> None:
-    """구글이 error 파라미터 전달 (사용자 거부) → 400."""
-    with patch("src.api.google_calendar_auth.get_settings", return_value=_settings_mock()):
-        with pytest.raises(HTTPException) as exc:
-            await google_calendar_callback(code=None, state=None, error="access_denied")
-    assert exc.value.status_code == 400
-
-
-@pytest.mark.asyncio
-async def test_callback_invalid_state_raises_400() -> None:
-    """위조된 state → 400."""
-    with patch("src.api.google_calendar_auth.get_settings", return_value=_settings_mock()):
-        with pytest.raises(HTTPException) as exc:
-            await google_calendar_callback(code="auth-code", state=f"1:{int(time.time())}:fakesig", error=None)
-    assert exc.value.status_code == 400
+    assert result.status_code == 302
+    assert "error=no_refresh_token" in result.headers["location"]

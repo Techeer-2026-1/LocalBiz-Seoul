@@ -36,6 +36,7 @@ class Settings(BaseSettings):
     google_calendar_client_id: str = ""
     google_calendar_client_secret: str = ""
     google_calendar_redirect_uri: str = "http://localhost:8000/api/v1/auth/google/calendar/callback"
+    frontend_base_url: str = "https://seoul-ai-guide.vercel.app"
 
     # --- App ---
     debug: bool = False
