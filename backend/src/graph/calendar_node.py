@@ -136,16 +136,16 @@ async def calendar_node(state: AgentState) -> dict[str, Any]:
 
     # 필수 필드 미입력 시 재질문 블록 반환
     if not event_title:
-        return {"response_blocks": [_error_block("일정 제목을 알려주세요. 예) '경복궁 투어'")]}
+        return {"response_blocks": [_reask_block("일정 제목이 없어요. 어떤 일정인가요? 예) '경복궁 투어'")]}
 
     if not start_time:
-        return {"response_blocks": [_error_block("언제 시작하는 일정인가요? 예) '5월 2일 오후 2시'")]}
+        return {"response_blocks": [_reask_block("언제 시작하는 일정인가요? 예) '5월 2일 오후 2시'")]}
 
     # ISO 형식 유효성 검증
     try:
         datetime.fromisoformat(start_time)
     except ValueError:
-        return {"response_blocks": [_error_block("언제 시작하는 일정인가요? 예) '5월 2일 오후 2시'")]}
+        return {"response_blocks": [_reask_block("언제 시작하는 일정인가요? 예) '5월 2일 오후 2시'")]}
 
     if end_time:
         try:
@@ -385,6 +385,15 @@ def _calendar_block(
     if calendar_link:
         block["calendar_link"] = calendar_link
     return block
+
+
+def _reask_block(prompt: str) -> dict[str, Any]:
+    """필수 정보 부족 시 재질문용 text_stream 블록 생성."""
+    return {
+        "type": "text_stream",
+        "system": "캘린더 일정 추가를 위해 필요한 정보가 부족합니다. 친절하고 자연스럽게 추가 정보를 요청하세요.",
+        "prompt": prompt,
+    }
 
 
 def _error_block(message: str) -> dict[str, Any]:
