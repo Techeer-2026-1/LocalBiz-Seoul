@@ -320,11 +320,13 @@ class DoneBlock(BaseModel):
 
     error 발생 시 status="error" + error_message에 상세 내용.
     기획서 기준 done 블록이 error 역할도 수행.
+    message_id: 방금 저장된 assistant 메시지 DB id (FE 북마크용).
     """
 
     type: str = "done"
     status: str = "done"  # "done" | "error" | "cancelled"
     error_message: Optional[str] = None
+    message_id: Optional[int] = None
 
 
 # ---------------------------------------------------------------------------

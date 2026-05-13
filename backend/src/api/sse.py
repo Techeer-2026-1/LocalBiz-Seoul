@@ -73,9 +73,10 @@ def format_status_event(message: str, node: Optional[str] = None) -> str:
 def format_done_event(
     status: str = "done",
     error_message: Optional[str] = None,
+    message_id: Optional[int] = None,
 ) -> str:
     """done 이벤트 생성."""
-    done = DoneBlock(status=status, error_message=error_message)
+    done = DoneBlock(status=status, error_message=error_message, message_id=message_id)
     return format_block_event(done)
 
 
@@ -168,18 +169,20 @@ async def _insert_message(
     thread_id: str,
     role: str,
     blocks: list[dict[str, Any]],
-) -> None:
+) -> int:
     """messages 테이블에 INSERT (append-only, 불변식 #3).
 
     message_id는 BIGSERIAL auto-increment (불변식 #1).
+    삽입된 message_id 반환.
     """
     blocks_json = json.dumps(blocks, ensure_ascii=False)
-    await pool.execute(
-        "INSERT INTO messages (thread_id, role, blocks) VALUES ($1, $2, $3::jsonb)",
+    row = await pool.fetchrow(
+        "INSERT INTO messages (thread_id, role, blocks) VALUES ($1, $2, $3::jsonb) RETURNING message_id",
         thread_id,
         role,
         blocks_json,
     )
+    return int(row["message_id"])
 
 
 # ---------------------------------------------------------------------------
@@ -414,9 +417,10 @@ async def chat_stream(
 
             # 4. assistant 메시지 INSERT (done 전에 완료)
             persistence_success = True
+            assistant_message_id: Optional[int] = None
             if assistant_blocks:
                 try:
-                    await _insert_message(pool, thread_id, "assistant", assistant_blocks)
+                    assistant_message_id = await _insert_message(pool, thread_id, "assistant", assistant_blocks)
                 except Exception:
                     logger.exception("assistant message INSERT failed: thread_id=%s", thread_id)
                     persistence_success = False
@@ -431,7 +435,7 @@ async def chat_stream(
                 yield format_error_event("PERSISTENCE_ERROR", "응답 저장에 실패했습니다.", recoverable=True)
                 yield format_done_event(status="error", error_message="응답 저장에 실패했습니다.")
             else:
-                yield format_done_event(status="done")
+                yield format_done_event(status="done", message_id=assistant_message_id)
 
         except Exception:
             logger.exception("SSE error: thread_id=%s", thread_id)
