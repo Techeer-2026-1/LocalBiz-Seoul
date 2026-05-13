@@ -87,6 +87,8 @@ async def google_calendar_auth_url(
     settings = get_settings()
     if not settings.jwt_secret:
         raise HTTPException(status_code=503, detail="서버 설정 오류: JWT 시크릿 미설정.")
+    if not settings.google_calendar_client_id:
+        raise HTTPException(status_code=503, detail="서버 설정 오류: Google Calendar Client ID 미설정.")
 
     state = _make_state(user_id, settings.jwt_secret)
     params = {
