@@ -24,8 +24,10 @@ logger = logging.getLogger(__name__)
 # map_markers 등 선택적 블록은 _OPTIONAL_BLOCKS에서 관리.
 _EXPECTED_BLOCK_ORDER: dict[str, list[str]] = {
     "GENERAL": ["intent", "text_stream", "done"],
-    "PLACE_SEARCH": ["intent", "text_stream", "places", "done"],
-    "PLACE_RECOMMEND": ["intent", "text_stream", "places", "done"],
+    "PLACE_SEARCH": ["intent", "places", "text_stream", "done"],
+    "PLACE_RECOMMEND": ["intent", "places", "text_stream", "done"],
+    "EVENT_SEARCH": ["intent", "events", "text_stream", "done"],
+    "EVENT_RECOMMEND": ["intent", "events", "text_stream", "done"],
     "COURSE_PLAN": ["intent", "text_stream", "course", "done"],
     "DETAIL_INQUIRY": ["intent", "text_stream", "done"],
 }

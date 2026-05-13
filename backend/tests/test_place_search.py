@@ -63,7 +63,7 @@ async def test_build_blocks_with_results() -> None:
     """검색 결과 있을 때 → text_stream + places + map_markers 블록 생성."""
     from src.graph.place_search_node import _build_blocks  # pyright: ignore[reportMissingImports]
 
-    blocks = _build_blocks("홍대 카페", _PG_RESULTS + _OS_RESULTS)
+    blocks = _build_blocks("홍대 카페", _PG_RESULTS + _OS_RESULTS, {})
     types = [b["type"] for b in blocks]
     assert "text_stream" in types
     assert "places" in types
@@ -77,7 +77,7 @@ async def test_build_blocks_empty() -> None:
     """검색 결과 없을 때 → text_stream만, "검색 결과가 없습니다" 포함."""
     from src.graph.place_search_node import _build_blocks  # pyright: ignore[reportMissingImports]
 
-    blocks = _build_blocks("없는 장소", [])
+    blocks = _build_blocks("없는 장소", [], {})
     assert len(blocks) == 1
     assert blocks[0]["type"] == "text_stream"
     assert "검색 결과가 없습니다" in blocks[0]["prompt"]
@@ -88,7 +88,7 @@ async def test_build_blocks_no_coordinates() -> None:
     from src.graph.place_search_node import _build_blocks  # pyright: ignore[reportMissingImports]
 
     no_coord = [{"place_id": "x", "name": "테스트", "category": "카페", "lat": None, "lng": None}]
-    blocks = _build_blocks("테스트", no_coord)
+    blocks = _build_blocks("테스트", no_coord, {})
     types = [b["type"] for b in blocks]
     assert "text_stream" in types
     assert "places" in types

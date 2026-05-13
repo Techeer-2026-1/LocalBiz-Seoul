@@ -101,7 +101,7 @@ async def test_build_blocks_with_db_events_only() -> None:
     """DB events만 있을 때: text_stream + events 블록 (references 없음)."""
     from src.graph.event_search_node import _build_blocks  # pyright: ignore[reportMissingImports]
 
-    blocks = _build_blocks("이번 주말 송파구 행사", _DB_EVENTS)
+    blocks = _build_blocks("이번 주말 송파구 행사", _DB_EVENTS, [])
 
     block_types = [b["type"] for b in blocks]
     assert "text_stream" in block_types
@@ -123,7 +123,7 @@ async def test_build_blocks_with_naver_fallback() -> None:
     from src.graph.event_search_node import _build_blocks  # pyright: ignore[reportMissingImports]
 
     merged = _DB_EVENTS + _NAVER_EVENTS
-    blocks = _build_blocks("주말 전시회", merged)
+    blocks = _build_blocks("주말 전시회", merged, [])
 
     block_types = [b["type"] for b in blocks]
     assert "text_stream" in block_types
@@ -141,7 +141,7 @@ async def test_build_blocks_empty_results() -> None:
     """검색 결과 0건: text_stream 블록만 생성 (events / references 없음)."""
     from src.graph.event_search_node import _build_blocks  # pyright: ignore[reportMissingImports]
 
-    blocks = _build_blocks("결과 없는 쿼리", [])
+    blocks = _build_blocks("결과 없는 쿼리", [], [])
 
     block_types = [b["type"] for b in blocks]
     assert "text_stream" in block_types

@@ -100,7 +100,7 @@ async def test_build_blocks_with_db_events_only() -> None:
     """DB events만 있을 때 — EVENT_RECOMMEND 차별화: references에 DB detail_url 포함."""
     from src.graph.event_recommend_node import _build_blocks  # pyright: ignore[reportMissingImports]
 
-    blocks = _build_blocks("이번 주말 송파구 행사 추천", _DB_EVENTS)
+    blocks = _build_blocks("이번 주말 송파구 행사 추천", _DB_EVENTS, [])
 
     block_types = [b["type"] for b in blocks]
     assert "text_stream" in block_types
@@ -126,7 +126,7 @@ async def test_build_blocks_with_naver_fallback() -> None:
     from src.graph.event_recommend_node import _build_blocks  # pyright: ignore[reportMissingImports]
 
     merged = _DB_EVENTS + _NAVER_EVENTS
-    blocks = _build_blocks("주말 전시회 추천", merged)
+    blocks = _build_blocks("주말 전시회 추천", merged, [])
 
     block_types = [b["type"] for b in blocks]
     assert "text_stream" in block_types
@@ -143,7 +143,7 @@ async def test_build_blocks_recommend_prompt_keywords() -> None:
     """EVENT_RECOMMEND 차별화: text_stream prompt에 추천 사유 강조 키워드 포함."""
     from src.graph.event_recommend_node import _build_blocks  # pyright: ignore[reportMissingImports]
 
-    blocks = _build_blocks("강남 전시회 추천", _DB_EVENTS)
+    blocks = _build_blocks("강남 전시회 추천", _DB_EVENTS, [])
 
     ts_block = next(b for b in blocks if b["type"] == "text_stream")
     prompt = ts_block["prompt"]
@@ -151,9 +151,8 @@ async def test_build_blocks_recommend_prompt_keywords() -> None:
 
     # 추천 사유 강조 키워드가 prompt 또는 system에 등장
     assert "추천" in prompt or "추천" in system
-    assert "이유" in prompt or "이유" in system
 
     # 빈 결과 시에도 안내 메시지에 추천 단어 포함
-    empty_blocks = _build_blocks("결과 없는 쿼리", [])
+    empty_blocks = _build_blocks("결과 없는 쿼리", [], [])
     empty_ts = next(b for b in empty_blocks if b["type"] == "text_stream")
     assert "추천" in empty_ts["prompt"] or "다른 조건" in empty_ts["prompt"]
