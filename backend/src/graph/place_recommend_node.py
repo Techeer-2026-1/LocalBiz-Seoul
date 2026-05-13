@@ -485,28 +485,6 @@ def _build_blocks(
             }
         )
 
-    # 4. references 블록 (리뷰 데이터 있는 장소만)
-    ref_items: list[dict[str, Any]] = []
-    for r in results:
-        pid = r.get("place_id", "")
-        review = review_data_map.get(pid)
-        if review and review.get("summary_text"):
-            ref_items.append(
-                {
-                    "source_type": "review",
-                    "source_id": pid,
-                    "snippet": review["summary_text"][:200],
-                }
-            )
-
-    if ref_items:
-        blocks.append(
-            {
-                "type": "references",
-                "items": ref_items,
-            }
-        )
-
     return blocks
 
 

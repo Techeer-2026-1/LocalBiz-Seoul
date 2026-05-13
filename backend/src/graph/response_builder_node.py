@@ -28,7 +28,7 @@ _EXPECTED_BLOCK_ORDER: dict[str, list[str]] = {
     "PLACE_RECOMMEND": ["intent", "places", "text_stream", "done"],
     "EVENT_SEARCH": ["intent", "events", "text_stream", "done"],
     "EVENT_RECOMMEND": ["intent", "events", "text_stream", "done"],
-    "COURSE_PLAN": ["intent", "text_stream", "course", "done"],
+    "COURSE_PLAN": ["intent", "course", "text_stream", "done"],
     "DETAIL_INQUIRY": ["intent", "text_stream", "done"],
 }
 

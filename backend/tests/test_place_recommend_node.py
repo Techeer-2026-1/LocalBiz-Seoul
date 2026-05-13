@@ -131,16 +131,11 @@ async def test_build_blocks_with_results() -> None:
     assert "text_stream" in types
     assert "places" in types
     assert "map_markers" in types
-    assert "references" in types
+    assert "references" not in types  # references 블록 제거됨
 
     # places 블록 개수
     places_block = next(b for b in blocks if b["type"] == "places")
     assert places_block["total_count"] == 2
-
-    # references 블록 — pg-001만 리뷰 데이터 있음
-    ref_block = next(b for b in blocks if b["type"] == "references")
-    assert len(ref_block["items"]) == 1
-    assert ref_block["items"][0]["source_id"] == "pg-001"
 
 
 async def test_build_blocks_empty() -> None:
@@ -165,11 +160,14 @@ async def test_build_blocks_no_coordinates() -> None:
     assert "map_markers" not in types
 
 
-async def test_build_blocks_no_reviews() -> None:
-    """리뷰 데이터 없는 경우 → references 블록 미생성."""
+async def test_build_blocks_no_references() -> None:
+    """references 블록은 항상 미생성 (제거됨)."""
     from src.graph.place_recommend_node import _build_blocks  # pyright: ignore[reportMissingImports]
 
-    blocks = _build_blocks("카페", _PG_RESULTS, {}, {})
+    review_map = {
+        "pg-001": {"keywords": ["조용한"], "summary_text": "조용한 카페"},
+    }
+    blocks = _build_blocks("카페", _PG_RESULTS, {}, review_map)
     types = [b["type"] for b in blocks]
     assert "references" not in types
 
