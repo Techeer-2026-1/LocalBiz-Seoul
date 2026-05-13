@@ -29,8 +29,11 @@ logger = logging.getLogger(__name__)
 _RECOMMEND_SYSTEM_PROMPT = (
     "당신은 서울 로컬 라이프 AI 챗봇 'AnyWay'입니다. "
     "자기소개나 인사로 시작하지 말고 바로 본론으로 답변하세요. "
-    "사용자의 조건에 맞는 장소를 추천하고 추천 이유를 친절하게 설명해주세요. "
-    "각 장소별로 왜 추천하는지 구체적인 근거(리뷰 키워드, 분위기, 특징)를 포함하세요."
+    "각 장소는 이미 카드로 소개되었습니다. "
+    "전체 추천 결과를 종합하여 2-3문장으로 간결하게 요약해주세요.\n\n"
+    "## 응답 형식 규칙\n"
+    "- 주제가 바뀔 때 빈 줄로 단락을 구분하세요.\n"
+    "- 핵심 정보는 **굵게** 강조하세요."
 )
 
 _MAX_RESULTS = 5
@@ -394,51 +397,19 @@ def _build_blocks(
     reasons: dict[str, str],
     review_data_map: dict[str, dict[str, Any]],
 ) -> list[dict[str, Any]]:
-    """text_stream + places + map_markers + references 블록 생성.
+    """places(+summary) + text_stream(종합 요약) + map_markers + references 블록 생성.
 
-    불변식 #11: text_stream → places → map_markers → references → done
+    불변식 #11: places → text_stream → map_markers → references → done
     """
     blocks: list[dict[str, Any]] = []
 
-    # 1. text_stream: 추천 사유 포함 프롬프트
-    if results:
-        result_lines: list[str] = []
-        for r in results:
-            pid = r.get("place_id", "")
-            line = f"- {r.get('name', '')} ({r.get('category', '')}, {r.get('district', '')})"
-            reason = reasons.get(pid)
-            if reason:
-                line += f" — {reason}"
-            review = review_data_map.get(pid)
-            if review:
-                kws = review.get("keywords", [])
-                if kws:
-                    line += f" [리뷰 키워드: {', '.join(kws[:5])}]"
-            result_lines.append(line)
-
-        prompt = (
-            f"사용자 질문: {query}\n\n"
-            f"추천 결과:\n" + "\n".join(result_lines) + "\n\n"
-            "위 결과를 바탕으로 각 장소를 왜 추천하는지 구체적인 이유와 함께 친절하게 소개해주세요. "
-            "리뷰 키워드가 있으면 활용하세요."
-        )
-    else:
-        prompt = f"사용자 질문: {query}\n\n추천할 장소를 찾지 못했습니다. 다른 조건으로 다시 검색해보시겠어요?"
-
-    blocks.append(
-        {
-            "type": "text_stream",
-            "system": _RECOMMEND_SYSTEM_PROMPT,
-            "prompt": prompt,
-        }
-    )
-
-    # 2. places 블록
+    # 1. places 블록 (카드 먼저 전송, reasons를 summary로 사용)
     place_items: list[dict[str, Any]] = []
     for r in results:
+        pid = r.get("place_id", "")
         item: dict[str, Any] = {
             "type": "place",
-            "place_id": r.get("place_id", ""),
+            "place_id": pid,
             "name": r.get("name", ""),
         }
         if r.get("category"):
@@ -451,6 +422,10 @@ def _build_blocks(
             item["lat"] = r["lat"]
         if r.get("lng") is not None:
             item["lng"] = r["lng"]
+        # LLM rerank reason → summary 필드 (추가 Gemini 호출 불필요)
+        reason = reasons.get(pid)
+        if reason:
+            item["summary"] = reason
         place_items.append(item)
 
     # places 블록은 항상 반환 (빈 배열 포함 — 블록 순서 검증 일관성)
@@ -459,6 +434,33 @@ def _build_blocks(
             "type": "places",
             "items": place_items,
             "total_count": len(place_items),
+        }
+    )
+
+    # 2. text_stream: 종합 요약 (카드 뒤에 스트리밍)
+    if results:
+        result_lines: list[str] = []
+        for r in results:
+            pid = r.get("place_id", "")
+            line = f"- {r.get('name', '')} ({r.get('category', '')}, {r.get('district', '')})"
+            review = review_data_map.get(pid)
+            if review:
+                kws = review.get("keywords", [])
+                if kws:
+                    line += f" [리뷰 키워드: {', '.join(kws[:5])}]"
+            result_lines.append(line)
+
+        prompt = (
+            f"사용자 질문: {query}\n\n추천 결과:\n" + "\n".join(result_lines) + "\n\n위 추천 결과를 종합 요약해주세요."
+        )
+    else:
+        prompt = f"사용자 질문: {query}\n\n추천할 장소를 찾지 못했습니다. 다른 조건으로 다시 검색해보시겠어요?"
+
+    blocks.append(
+        {
+            "type": "text_stream",
+            "system": _RECOMMEND_SYSTEM_PROMPT,
+            "prompt": prompt,
         }
     )
 

@@ -22,9 +22,18 @@ logger = logging.getLogger(__name__)
 _PLACE_SEARCH_SYSTEM_PROMPT = (
     "당신은 서울 로컬 라이프 AI 챗봇 'AnyWay'입니다. "
     "자기소개나 인사로 시작하지 말고 바로 본론으로 답변하세요. "
-    "사용자의 장소 검색 결과를 친절하게 요약해주세요. "
-    "검색 결과가 있으면 핵심 장소 2-3개를 간단히 소개하고, "
-    "없으면 '검색 결과가 없습니다'라고 안내하세요."
+    "각 장소는 이미 카드로 소개되었습니다. "
+    "전체 검색 결과를 종합하여 2-3문장으로 간결하게 요약해주세요. "
+    "없으면 '검색 결과가 없습니다'라고 안내하세요.\n\n"
+    "## 응답 형식 규칙\n"
+    "- 주제가 바뀔 때 빈 줄로 단락을 구분하세요.\n"
+    "- 핵심 정보는 **굵게** 강조하세요."
+)
+
+_DESC_SYSTEM_PROMPT = (
+    "주어진 장소 목록의 각 장소에 대해 1-2문장의 간결한 소개를 작성해주세요.\n"
+    "JSON 배열로만 응답하세요:\n"
+    '[{"place_id": "...", "description": "1-2문장 소개"}, ...]'
 )
 
 _MAX_RESULTS = 5
@@ -190,33 +199,69 @@ def _merge_results(
 
 
 # ---------------------------------------------------------------------------
+# per-place description 생성 (Gemini JSON mode)
+# ---------------------------------------------------------------------------
+async def _generate_place_descriptions(
+    results: list[dict[str, Any]],
+    query: str,
+    api_key: str,
+) -> dict[str, str]:
+    """Gemini로 per-place 설명 생성. 실패 시 빈 dict (graceful degradation)."""
+    import json
+
+    if not results or not api_key:
+        return {}
+
+    from langchain_google_genai import ChatGoogleGenerativeAI
+
+    items_text = "\n".join(
+        f"- place_id={r.get('place_id', '')}, name={r.get('name', '')}, "
+        f"category={r.get('category', '')}, district={r.get('district', '')}"
+        for r in results
+    )
+    prompt = f"사용자 질문: {query}\n\n장소 목록:\n{items_text}"
+
+    try:
+        llm = ChatGoogleGenerativeAI(
+            model="gemini-2.5-flash",
+            google_api_key=api_key,
+            temperature=0.3,
+            timeout=10,
+        )
+        response = await llm.ainvoke(
+            [
+                ("system", _DESC_SYSTEM_PROMPT),
+                ("human", prompt),
+            ]
+        )
+        text = str(response.content).strip()
+
+        # Gemini ```json ... ``` 래핑 처리
+        if text.startswith("```"):
+            text = text.split("```")[1]
+            if text.startswith("json"):
+                text = text[4:]
+            text = text.strip()
+
+        items_data = json.loads(text)
+        return {item["place_id"]: item["description"] for item in items_data if "place_id" in item}
+    except Exception:
+        logger.exception("per-place description generation failed → fallback")
+        return {}
+
+
+# ---------------------------------------------------------------------------
 # 블록 생성
 # ---------------------------------------------------------------------------
 def _build_blocks(
     query: str,
     results: list[dict[str, Any]],
+    descriptions: dict[str, str],
 ) -> list[dict[str, Any]]:
-    """검색 결과 → text_stream + places + map_markers 블록."""
+    """검색 결과 → places(+summary) + text_stream(종합 요약) + map_markers 블록."""
     blocks: list[dict[str, Any]] = []
 
-    # 1. text_stream: Gemini 요약 프롬프트
-    if results:
-        result_summary = "\n".join(
-            f"- {r.get('name', '')} ({r.get('category', '')}, {r.get('district', '')})" for r in results
-        )
-        prompt = f"사용자 질문: {query}\n\n검색 결과:\n{result_summary}\n\n위 결과를 친절하게 요약해주세요."
-    else:
-        prompt = f"사용자 질문: {query}\n\n검색 결과가 없습니다. 다른 검색어를 제안해주세요."
-
-    blocks.append(
-        {
-            "type": "text_stream",
-            "system": _PLACE_SEARCH_SYSTEM_PROMPT,
-            "prompt": prompt,
-        }
-    )
-
-    # 2. places 블록
+    # 1. places 블록 (카드 먼저 전송)
     place_items: list[dict[str, Any]] = []
     for r in results:
         item: dict[str, Any] = {
@@ -234,6 +279,10 @@ def _build_blocks(
             item["lat"] = r["lat"]
         if r.get("lng") is not None:
             item["lng"] = r["lng"]
+        # per-place description → summary 필드
+        desc = descriptions.get(r.get("place_id", ""))
+        if desc:
+            item["summary"] = desc
         place_items.append(item)
 
     if place_items:
@@ -244,6 +293,23 @@ def _build_blocks(
                 "total_count": len(place_items),
             }
         )
+
+    # 2. text_stream: 종합 요약 (카드 뒤에 스트리밍)
+    if results:
+        result_summary = "\n".join(
+            f"- {r.get('name', '')} ({r.get('category', '')}, {r.get('district', '')})" for r in results
+        )
+        prompt = f"사용자 질문: {query}\n\n검색 결과:\n{result_summary}\n\n위 결과를 종합 요약해주세요."
+    else:
+        prompt = f"사용자 질문: {query}\n\n검색 결과가 없습니다. 다른 검색어를 제안해주세요."
+
+    blocks.append(
+        {
+            "type": "text_stream",
+            "system": _PLACE_SEARCH_SYSTEM_PROMPT,
+            "prompt": prompt,
+        }
+    )
 
     # 3. map_markers 블록 (좌표 있는 결과만)
     markers: list[dict[str, Any]] = []
@@ -320,8 +386,13 @@ async def place_search_node(state: dict[str, Any]) -> dict[str, Any]:
     # 병합
     results = _merge_results(pg_results, os_results)
 
+    # per-place description 생성
+    descriptions: dict[str, str] = {}
+    if results and settings.gemini_llm_api_key:
+        descriptions = await _generate_place_descriptions(results, query, settings.gemini_llm_api_key)
+
     # 블록 생성
-    blocks = _build_blocks(query, results)
+    blocks = _build_blocks(query, results, descriptions)
 
     logger.info("place_search: pg=%d, os=%d, merged=%d", len(pg_results), len(os_results), len(results))
 
