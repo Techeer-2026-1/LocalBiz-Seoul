@@ -14,7 +14,7 @@ import hmac
 import logging
 import time
 from typing import Optional
-from urllib.parse import urlencode
+from urllib.parse import quote, urlencode
 
 import httpx
 from fastapi import APIRouter, Depends, HTTPException, Query
@@ -109,7 +109,7 @@ def _calendar_redirect(base_url: str, error: Optional[str] = None) -> RedirectRe
     """FE /calendar/connected 페이지로 302 리다이렉트. 에러 시 ?error= 쿼리 추가."""
     url = f"{base_url}/calendar/connected"
     if error:
-        url = f"{url}?error={error}"
+        url = f"{url}?error={quote(error, safe='')}"
     return RedirectResponse(url=url, status_code=302)
 
 
@@ -134,7 +134,7 @@ async def google_calendar_callback(
         return _calendar_redirect(base_url, error="invalid_request")
 
     if not settings.jwt_secret:
-        raise HTTPException(status_code=503, detail="서버 설정 오류: JWT 시크릿 미설정.")
+        return _calendar_redirect(base_url, error="server_error")
 
     try:
         user_id = _verify_state(state, settings.jwt_secret)

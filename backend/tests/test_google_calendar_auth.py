@@ -214,6 +214,16 @@ async def test_callback_invalid_state_redirects_with_invalid_state() -> None:
 
 
 @pytest.mark.asyncio
+async def test_callback_no_jwt_secret_redirects_with_server_error() -> None:
+    """jwt_secret 미설정 → ?error=server_error redirect."""
+    with patch("src.api.google_calendar_auth.get_settings", return_value=_settings_mock(jwt_secret="")):
+        result = await google_calendar_callback(code="auth-code", state=_make_valid_state(), error=None)
+
+    assert result.status_code == 302
+    assert "error=server_error" in result.headers["location"]
+
+
+@pytest.mark.asyncio
 async def test_callback_token_exchange_failure_redirects_with_error() -> None:
     """code 교환 실패 (구글 400) → ?error=token_exchange_failed redirect."""
     state = _make_valid_state()
