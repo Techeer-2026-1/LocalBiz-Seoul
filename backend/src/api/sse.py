@@ -136,6 +136,7 @@ async def _load_recent_history(pool: Any, thread_id: str) -> list[dict[str, str]
             thread_id,
         )
     except Exception:
+        logger.warning("_load_recent_history: DB 조회 실패 thread_id=%s → 빈 이력 반환", thread_id)
         return []
 
     history: list[dict[str, str]] = []

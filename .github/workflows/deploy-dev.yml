@@ -22,7 +22,7 @@ jobs:
             git pull origin dev
             source venv/bin/activate
             pip install -q -r backend/requirements.txt
-            _upsert_env() { local k="$1" v="$2" f="backend/.env"; grep -q "^${k}=" "$f" 2>/dev/null && sed -i "s|^${k}=.*|${k}=${v}|" "$f" || echo "${k}=${v}" >> "$f"; }
+            _upsert_env() { local k="$1" v="$2" f="backend/.env"; local escaped; escaped=$(printf '%s\n' "$v" | sed 's/[&/\]/\\&/g'); grep -q "^${k}=" "$f" 2>/dev/null && sed -i "s|^${k}=.*|${k}=${escaped}|" "$f" || echo "${k}=${v}" >> "$f"; }
             _upsert_env "GOOGLE_CALENDAR_CLIENT_ID" "${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}"
             _upsert_env "GOOGLE_CALENDAR_CLIENT_SECRET" "${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}"
             _upsert_env "GOOGLE_CALENDAR_REDIRECT_URI" "${{ secrets.GOOGLE_CALENDAR_REDIRECT_URI }}"
