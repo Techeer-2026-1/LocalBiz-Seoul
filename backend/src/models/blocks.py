@@ -53,6 +53,14 @@ class TextStreamBlock(BaseModel):
 # ---------------------------------------------------------------------------
 # 4. place — 단일 장소 카드
 # ---------------------------------------------------------------------------
+class CongestionInfo(BaseModel):
+    """동네 단위 혼잡도 (population_stats district fallback, area_proxy)."""
+
+    level: str  # "low" | "medium" | "high"
+    updated_at: str  # ISO date string of population_stats base_date
+    source: Optional[str] = None  # "area_proxy"
+
+
 class PlaceBlock(BaseModel):
     """단일 장소 상세 정보."""
 
@@ -67,6 +75,7 @@ class PlaceBlock(BaseModel):
     rating: Optional[float] = None
     image_url: Optional[str] = None
     summary: Optional[str] = None  # LLM 요약 (선택)
+    congestion: Optional[CongestionInfo] = None
 
 
 # ---------------------------------------------------------------------------

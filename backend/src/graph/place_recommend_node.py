@@ -422,6 +422,8 @@ def _build_blocks(
             item["lat"] = r["lat"]
         if r.get("lng") is not None:
             item["lng"] = r["lng"]
+        if r.get("congestion"):
+            item["congestion"] = r["congestion"]
         # LLM rerank reason → summary 필드 (추가 Gemini 호출 불필요)
         reason = reasons.get(pid)
         if reason:
@@ -574,6 +576,24 @@ async def place_recommend_node(state: dict[str, Any]) -> dict[str, Any]:
 
     # ⑤ LLM Rerank
     reranked, reasons = await _llm_rerank(candidates, query, keywords, review_data_map)
+
+    # congestion 주입 (district 기준 area_proxy, 실패 시 무시)
+    try:
+        from src.graph.crowdedness_node import fetch_congestion_by_district  # pyright: ignore[reportMissingImports]
+
+        districts = list({r["district"] for r in reranked if r.get("district")})
+        if districts:
+            congs = await asyncio.gather(
+                *(fetch_congestion_by_district(pool, d) for d in districts),
+                return_exceptions=True,
+            )
+            cong_map = {d: c for d, c in zip(districts, congs, strict=True) if isinstance(c, dict)}
+            for r in reranked:
+                d = r.get("district")
+                if d and d in cong_map:
+                    r["congestion"] = cong_map[d]
+    except Exception:
+        logger.warning("congestion fetch skipped")
 
     # ⑥ 블록 생성
     blocks = _build_blocks(query, reranked, reasons, review_data_map)
