@@ -30,9 +30,19 @@ logger = logging.getLogger(__name__)
 
 _EVENT_SEARCH_SYSTEM_PROMPT = (
     "당신은 서울 로컬 라이프 AI 챗봇 'AnyWay'입니다. "
-    "사용자의 행사 검색 결과를 친절하게 요약해주세요. "
-    "검색 결과가 있으면 핵심 행사 2-3개를 간단히 소개하고, "
-    "없으면 '검색 결과가 없습니다'라고 안내하세요."
+    "자기소개나 인사로 시작하지 말고 바로 본론으로 답변하세요. "
+    "각 행사는 이미 카드로 소개되었습니다. "
+    "전체 검색 결과를 종합하여 2-3문장으로 간결하게 요약해주세요. "
+    "없으면 '검색 결과가 없습니다'라고 안내하세요.\n\n"
+    "## 응답 형식 규칙\n"
+    "- 주제가 바뀔 때 빈 줄로 단락을 구분하세요.\n"
+    "- 핵심 정보는 **굵게** 강조하세요."
+)
+
+_EVENT_DESC_SYSTEM_PROMPT = (
+    "주어진 행사 목록의 각 행사에 대해 1-2문장의 간결한 소개를 작성해주세요.\n"
+    "JSON 배열로만 응답하세요:\n"
+    '[{"index": 0, "description": "1-2문장 소개"}, ...]'
 )
 
 _MAX_RESULTS = 5
@@ -188,40 +198,78 @@ def _naver_to_event_dict(item: dict[str, Any]) -> dict[str, Any]:
 
 
 # ---------------------------------------------------------------------------
+# per-event description 생성 (Gemini JSON mode)
+# ---------------------------------------------------------------------------
+async def _generate_event_descriptions(
+    events: list[dict[str, Any]],
+    query: str,
+    api_key: str,
+) -> list[str]:
+    """Gemini로 per-event 설명 생성. index 기반 반환 (event_id가 None일 수 있으므로).
+
+    실패 시 빈 list (graceful degradation).
+    """
+    import json
+
+    if not events or not api_key:
+        return []
+
+    from langchain_google_genai import ChatGoogleGenerativeAI
+
+    items_text = "\n".join(
+        f"- index={i}, title={e.get('title', '')}, "
+        f"category={e.get('category') or '미정'}, district={e.get('district') or '미정'}"
+        for i, e in enumerate(events)
+    )
+    prompt = f"사용자 질문: {query}\n\n행사 목록:\n{items_text}"
+
+    try:
+        llm = ChatGoogleGenerativeAI(
+            model="gemini-2.5-flash",
+            google_api_key=api_key,
+            temperature=0.3,
+            timeout=10,
+        )
+        response = await llm.ainvoke(
+            [
+                ("system", _EVENT_DESC_SYSTEM_PROMPT),
+                ("human", prompt),
+            ]
+        )
+        text = str(response.content).strip()
+
+        if text.startswith("```"):
+            text = text.split("```")[1]
+            if text.startswith("json"):
+                text = text[4:]
+            text = text.strip()
+
+        items_data = json.loads(text)
+        # index 순서로 description 배열 구성
+        desc_map: dict[int, str] = {item["index"]: item["description"] for item in items_data if "index" in item}
+        return [desc_map.get(i, "") for i in range(len(events))]
+    except Exception:
+        logger.exception("per-event description generation failed → fallback")
+        return []
+
+
+# ---------------------------------------------------------------------------
 # 블록 생성
 # ---------------------------------------------------------------------------
 def _build_blocks(
     query: str,
     events: list[dict[str, Any]],
+    descriptions: list[str],
 ) -> list[dict[str, Any]]:
-    """검색 결과 → text_stream + events + references 블록.
+    """검색 결과 → events(+description) + text_stream(종합 요약) + references 블록.
 
     events 중 source='naver_blog' 항목은 references[] 블록에 추가 노출 (출처 링크).
     """
     blocks: list[dict[str, Any]] = []
 
-    # 1. text_stream: Gemini 요약 프롬프트
-    if events:
-        result_summary = "\n".join(
-            f"- {e.get('title', '')} ({e.get('category') or '카테고리 미정'}, "
-            f"{e.get('district') or e.get('source', '')})"
-            for e in events
-        )
-        prompt = f"사용자 질문: {query}\n\n검색 결과:\n{result_summary}\n\n위 결과를 친절하게 요약해주세요."
-    else:
-        prompt = f"사용자 질문: {query}\n\n검색 결과가 없습니다. 다른 검색어를 제안해주세요."
-
-    blocks.append(
-        {
-            "type": "text_stream",
-            "system": _EVENT_SEARCH_SYSTEM_PROMPT,
-            "prompt": prompt,
-        }
-    )
-
-    # 2. events 블록 (DB + Naver 통합)
+    # 1. events 블록 (카드 먼저 전송)
     event_items: list[dict[str, Any]] = []
-    for e in events:
+    for i, e in enumerate(events):
         item: dict[str, Any] = {
             "type": "event",
             "title": e.get("title", ""),
@@ -255,6 +303,9 @@ def _build_blocks(
             item["summary"] = e["summary"]
         if e.get("source"):
             item["source"] = e["source"]
+        # per-event description
+        if descriptions and i < len(descriptions) and descriptions[i]:
+            item["description"] = descriptions[i]
         event_items.append(item)
 
     if event_items:
@@ -265,6 +316,25 @@ def _build_blocks(
                 "total_count": len(event_items),
             }
         )
+
+    # 2. text_stream: 종합 요약 (카드 뒤에 스트리밍)
+    if events:
+        result_summary = "\n".join(
+            f"- {e.get('title', '')} ({e.get('category') or '카테고리 미정'}, "
+            f"{e.get('district') or e.get('source', '')})"
+            for e in events
+        )
+        prompt = f"사용자 질문: {query}\n\n검색 결과:\n{result_summary}\n\n위 결과를 종합 요약해주세요."
+    else:
+        prompt = f"사용자 질문: {query}\n\n검색 결과가 없습니다. 다른 검색어를 제안해주세요."
+
+    blocks.append(
+        {
+            "type": "text_stream",
+            "system": _EVENT_SEARCH_SYSTEM_PROMPT,
+            "prompt": prompt,
+        }
+    )
 
     # 3. references 블록 (Naver fallback 결과만 — 출처 링크)
     references: list[dict[str, Any]] = []
@@ -332,8 +402,13 @@ async def event_search_node(state: dict[str, Any]) -> dict[str, Any]:
     # 3) 통합 (DB 결과 + Naver fallback) — 상위 _MAX_RESULTS건
     merged = (pg_events + naver_events)[:_MAX_RESULTS]
 
-    # 4) 블록 생성
-    blocks = _build_blocks(query, merged)
+    # 4) per-event description 생성
+    descriptions: list[str] = []
+    if merged and settings.gemini_llm_api_key:
+        descriptions = await _generate_event_descriptions(merged, query, settings.gemini_llm_api_key)
+
+    # 5) 블록 생성
+    blocks = _build_blocks(query, merged, descriptions)
 
     logger.info(
         "event_search: pg=%d, naver=%d, merged=%d (district=%s, category=%s)",

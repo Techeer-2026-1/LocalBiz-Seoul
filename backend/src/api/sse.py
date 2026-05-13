@@ -128,6 +128,41 @@ async def _ensure_conversation(pool: Any, thread_id: str, user_id: int) -> None:
     )
 
 
+async def _load_recent_history(pool: Any, thread_id: str) -> list[dict[str, str]]:
+    """intent 분류용 최근 대화 이력 조회 (최근 6턴)."""
+    try:
+        rows = await pool.fetch(
+            "SELECT role, blocks FROM messages WHERE thread_id = $1 ORDER BY message_id DESC LIMIT 6",
+            thread_id,
+        )
+    except Exception:
+        logger.warning("_load_recent_history: DB 조회 실패 thread_id=%s → 빈 이력 반환", thread_id)
+        return []
+
+    history: list[dict[str, str]] = []
+    for row in reversed(rows):
+        role: str = row["role"]
+        blocks = row["blocks"]
+        if isinstance(blocks, str):
+            try:
+                blocks = json.loads(blocks)
+            except Exception:
+                continue
+        parts: list[str] = []
+        for block in blocks if isinstance(blocks, list) else []:
+            if not isinstance(block, dict):
+                continue
+            btype = block.get("type", "")
+            if btype == "text" and role == "user":
+                parts.append(block.get("content", ""))
+            elif btype == "text_stream" and role == "assistant":
+                parts.append(block.get("content", ""))
+        content = " ".join(p for p in parts if p).strip()
+        if content:
+            history.append({"role": role, "content": content})
+    return history
+
+
 async def _insert_message(
     pool: Any,
     thread_id: str,
@@ -272,9 +307,10 @@ async def chat_stream(
             from src.graph.intent_router_node import classify_intents  # pyright: ignore[reportMissingImports]
 
             graph = build_graph(checkpointer=None)
+            conversation_history = await _load_recent_history(pool, thread_id)
 
             try:
-                intents = await classify_intents(query, conversation_history=[])
+                intents = await classify_intents(query, conversation_history=conversation_history)
             except Exception:
                 logger.exception("classify_intents failed: thread_id=%s", thread_id)
                 intents = []

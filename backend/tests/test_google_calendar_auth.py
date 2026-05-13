@@ -121,6 +121,17 @@ async def test_auth_url_no_jwt_secret_raises_503() -> None:
     assert exc.value.status_code == 503
 
 
+@pytest.mark.asyncio
+async def test_auth_url_no_client_id_raises_503() -> None:
+    """google_calendar_client_id 미설정(빈 문자열) → 503."""
+    m = _settings_mock()
+    m.google_calendar_client_id = ""
+    with patch("src.api.google_calendar_auth.get_settings", return_value=m):
+        with pytest.raises(HTTPException) as exc:
+            await google_calendar_auth_url(user_id=_USER_ID)
+    assert exc.value.status_code == 503
+
+
 # ---------------------------------------------------------------------------
 # GET /api/v1/auth/google/calendar/callback — code 교환 → upsert
 # ---------------------------------------------------------------------------

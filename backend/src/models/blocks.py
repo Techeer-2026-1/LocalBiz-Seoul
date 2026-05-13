@@ -97,6 +97,7 @@ class EventItem(BaseModel):
 
     event_id: str  # UUID (VARCHAR(36)), 불변식 #1
     title: str = ""
+    description: Optional[str] = None  # per-event LLM 소개 (SSE 응답 개선)
     district: Optional[str] = None  # 의도적 비정규화
     place_name: Optional[str] = None  # 의도적 비정규화
     address: Optional[str] = None  # 의도적 비정규화

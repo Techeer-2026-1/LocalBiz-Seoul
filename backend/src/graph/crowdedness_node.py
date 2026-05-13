@@ -176,7 +176,7 @@ def _build_crowdedness_blocks(
     return [
         {
             "type": "text_stream",
-            "system": "당신은 서울 로컬 라이프 AI 챗봇입니다. 제공된 혼잡도 정보를 바탕으로 자연스럽고 친근하게 설명해주세요.",
+            "system": "당신은 서울 로컬 라이프 AI 챗봇입니다. 자기소개나 인사로 시작하지 말고 바로 본론으로 답변하세요. 제공된 혼잡도 정보를 바탕으로 자연스럽고 친근하게 설명해주세요.",
             "prompt": prompt,
         }
     ]
@@ -221,7 +221,7 @@ async def crowdedness_node(state: dict[str, Any]) -> dict[str, Any]:
             "response_blocks": [
                 {
                     "type": "text_stream",
-                    "system": "당신은 서울 로컬 라이프 AI 챗봇입니다.",
+                    "system": "당신은 서울 로컬 라이프 AI 챗봇입니다. 자기소개나 인사로 시작하지 말고 바로 본론으로 답변하세요.",
                     "prompt": "질문하신 지역을 인식하지 못했습니다. 지역명을 포함해 다시 질문해 주세요.",
                 }
             ]
@@ -253,7 +253,7 @@ async def crowdedness_node(state: dict[str, Any]) -> dict[str, Any]:
             "response_blocks": [
                 {
                     "type": "text_stream",
-                    "system": "당신은 서울 로컬 라이프 AI 챗봇입니다.",
+                    "system": "당신은 서울 로컬 라이프 AI 챗봇입니다. 자기소개나 인사로 시작하지 말고 바로 본론으로 답변하세요.",
                     "prompt": "해당 지역의 생활인구 데이터가 없습니다.",
                 }
             ]
