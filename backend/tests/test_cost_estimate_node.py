@@ -4,6 +4,7 @@ from __future__ import annotations
 
 from src.graph.cost_estimate_node import (
     _build_prompt,
+    _extract_party_size,
     _has_specific_place,
 )
 from src.graph.intent_router_node import _ROUTABLE_INTENTS, IntentType
@@ -61,7 +62,31 @@ def test_cost_estimate_node_path_b() -> None:
     assert "음식점" in prompt
     assert "이탈리안" in prompt
     assert "약 X~Y만원대" in prompt
-    assert "2인" in prompt  # party_size_hint 반영
+    assert "2인" in prompt
+
+
+def test_build_prompt_path_a_price_list() -> None:
+    query = "봉피양 강남점 2인 얼마?"
+    pq = {"place_name": "봉피양 강남점"}
+    prompt = _build_prompt(query, pq, place_name="봉피양 강남점", blog_prices=[11000, 17000, 36000])
+
+    assert "메뉴 1개당 가격" in prompt
+    assert "11,000원" in prompt
+    assert "17,000원" in prompt
+    assert "2인" in prompt
+
+
+def test_extract_party_size() -> None:
+    assert _extract_party_size("봉피양 강남점 2인 얼마?") == 2
+    assert _extract_party_size("3인 방문 예정") == 3
+    assert _extract_party_size("강남 이탈리안 얼마?") is None
+
+
+def test_build_prompt_defaults_to_1_person() -> None:
+    query = "봉피양 강남점 얼마야?"
+    pq = {"place_name": "봉피양 강남점"}
+    prompt = _build_prompt(query, pq, place_name="봉피양 강남점", blog_prices=[17000])
+    assert "1인 방문 기준" in prompt
 
 
 # ---------------------------------------------------------------------------

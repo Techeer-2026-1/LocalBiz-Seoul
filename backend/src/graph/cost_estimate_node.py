@@ -15,13 +15,14 @@ from __future__ import annotations
 
 import logging
 import re
+from datetime import date, timedelta
 from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
 
 _NAVER_BLOG_URL = "https://openapi.naver.com/v1/search/blog.json"
 _NAVER_TIMEOUT = 5.0
-_NAVER_DISPLAY = 5
+_NAVER_DISPLAY = 10
 
 _PRICE_MIN = 1_000
 _PRICE_MAX = 500_000
@@ -69,8 +70,17 @@ async def _fetch_blog_prices(
         logger.exception("cost_estimate: naver blog search 실패")
         return []
 
+    cutoff = date.today() - timedelta(days=365)
     prices: list[int] = []
     for item in items:
+        postdate_str = item.get("postdate", "")
+        try:
+            post_date = date(int(postdate_str[:4]), int(postdate_str[4:6]), int(postdate_str[6:8]))
+            if post_date < cutoff:
+                continue
+        except (ValueError, IndexError):
+            continue
+
         raw = item.get("description", "")
         text = re.sub(r"<[^>]+>", "", raw)
         for amount_str, unit in re.findall(r"(\d{1,3}(?:,\d{3})*|\d+)\s*(만\s*원|천\s*원|원)", text):
@@ -91,11 +101,9 @@ async def _fetch_blog_prices(
     return prices
 
 
-def _party_size_hint(query: str) -> Optional[str]:
+def _extract_party_size(query: str) -> Optional[int]:
     m = re.search(r"(\d+)\s*인", query)
-    if m:
-        return f"'{query}'에 언급된 인원 수를 반영해주세요."
-    return None
+    return int(m.group(1)) if m else None
 
 
 def _build_prompt(
@@ -104,22 +112,20 @@ def _build_prompt(
     place_name: Optional[str],
     blog_prices: list[int],
 ) -> str:
-    hint = _party_size_hint(query)
+    party = _extract_party_size(query) or 1
+    party_prefix = f"{party}인 방문 기준, "
 
     if place_name:
         if blog_prices:
-            price_info = f"{min(blog_prices):,}~{max(blog_prices):,}원 ({len(blog_prices)}건 수집)"
+            price_list = ", ".join(f"{p:,}원" for p in sorted(blog_prices))
+            price_section = f"블로그 수집 메뉴 단가 (메뉴 1개당 가격): {price_list}"
         else:
-            price_info = "정보 없음"
+            price_section = "블로그 가격 정보: 없음"
         lines = [
-            f"{place_name}의 가격 정보입니다:",
-            f"- 블로그 가격 데이터: {price_info}",
+            f"{place_name} 방문 예상 비용을 알려주세요.",
+            price_section,
+            f"{party_prefix}위 단가를 참고해 인당 메뉴 1~2개 주문 시 총 예상 비용을 '약 X~Y만원대' 형식으로 알려주세요. 메뉴 목록은 나열하지 마세요.",
         ]
-        if hint:
-            lines.append(hint)
-        lines.append(
-            "모든 메뉴 가격을 나열하지 말고, 위 데이터를 참고해 '약 X~Y만원대' 형식의 가격 구간으로 친절하게 안내해주세요."
-        )
         return "\n".join(lines)
 
     district = processed_query.get("district") or processed_query.get("neighborhood") or "서울"
@@ -132,10 +138,8 @@ def _build_prompt(
         f"- 지역: {district}",
         f"- 종류: {category}" + (f" / {keyword_str}" if keyword_str else ""),
         f"- 쿼리: {query}",
+        f"{party_prefix}'약 X~Y만원대' 형식의 가격 구간으로 알려주세요. 메뉴 목록은 나열하지 마세요.",
     ]
-    if hint:
-        lines.append(hint)
-    lines.append("모든 메뉴를 나열하지 말고, '약 X~Y만원대' 형식의 가격 구간으로 친절하게 안내해주세요.")
     return "\n".join(lines)
 
 
