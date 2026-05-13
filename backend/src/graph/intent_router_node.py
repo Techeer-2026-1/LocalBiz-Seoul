@@ -52,6 +52,7 @@ PHASE1_INTENTS: frozenset[IntentType] = frozenset(  # pyright: ignore[reportAssi
         IntentType.CROWDEDNESS,
         IntentType.IMAGE_SEARCH,
         IntentType.ANALYSIS,
+        IntentType.COST_ESTIMATE,
         IntentType.GENERAL,
     }
 )
@@ -72,6 +73,7 @@ _ROUTABLE_INTENTS: frozenset[IntentType] = frozenset(  # pyright: ignore[reportA
         IntentType.CROWDEDNESS,
         IntentType.IMAGE_SEARCH,
         IntentType.ANALYSIS,
+        IntentType.COST_ESTIMATE,
         IntentType.GENERAL,
     }
 )
@@ -96,16 +98,12 @@ Phase 1 (active):
 - FAVORITE: bookmarking or favoriting something
 - REVIEW_COMPARE: comparing two or more places by 6 metrics (satisfaction/accessibility/cleanliness/value/atmosphere/expertise)
 - CROWDEDNESS: asking about current crowdedness or population density of an area
-- GENERAL: general conversation, greetings, or anything else
-
-Phase 2 (not yet active, classify as GENERAL for now):
-- ANALYSIS, COST_ESTIMATE, IMAGE_SEARCH
-- ANALYSIS: analyzing a single place with 6 metrics (satisfaction/accessibility/cleanliness/value/atmosphere/expertise)
+- COST_ESTIMATE: asking about expected cost or price range for a place, restaurant, or activity
 - IMAGE_SEARCH: user sends an image URL (http/https link ending in image extension or storage URL) to identify a place or find similar places; also when user refers to a previously sent image ("아까 그 사진", "방금 올린 이미지", "그 사진 어딘지", "이전 사진") without a new URL
 - GENERAL: general conversation, greetings, or anything else
 
 Phase 2 (not yet active, classify as GENERAL for now):
-- COST_ESTIMATE, CROWDEDNESS
+- ANALYSIS: analyzing a single place with 6 metrics (satisfaction/accessibility/cleanliness/value/atmosphere/expertise)
 
 Respond in JSON: {"intent": "INTENT_NAME", "confidence": 0.0-1.0}
 """
@@ -126,12 +124,12 @@ Phase 1 (active):
 - CALENDAR: adding an event to calendar
 - FAVORITE: bookmarking or favoriting something
 - REVIEW_COMPARE: comparing two or more places by 6 metrics
-- ANALYSIS: analyzing a single place with 6 metrics
+- COST_ESTIMATE: asking about expected cost or price range for a place, restaurant, or activity
 - IMAGE_SEARCH: user sends an image URL to identify a place or find similar places; also when user refers to a previously sent image without a new URL
 - GENERAL: general conversation, greetings, or anything else
 
 Phase 2 (not yet active, classify as GENERAL for now):
-- COST_ESTIMATE, CROWDEDNESS
+- ANALYSIS: analyzing a single place with 6 metrics (satisfaction/accessibility/cleanliness/value/atmosphere/expertise)
 
 Rules:
 - If the query has ONE purpose, return ONE intent. Example: "카페에서 전시회 가는 코스" → COURSE_PLAN only.
