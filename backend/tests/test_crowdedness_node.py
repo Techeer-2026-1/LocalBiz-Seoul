@@ -38,10 +38,10 @@ async def test_classify_level_혼잡() -> None:
     assert _classify_level(1.3) == "혼잡"
 
 
-async def test_classify_level_매우혼잡() -> None:
+async def test_classify_level_혼잡_high_ratio() -> None:
     from src.graph.crowdedness_node import _classify_level  # pyright: ignore[reportMissingImports]
 
-    assert _classify_level(1.6) == "매우혼잡"
+    assert _classify_level(1.6) == "혼잡"
 
 
 async def test_classify_level_zero_avg() -> None:
