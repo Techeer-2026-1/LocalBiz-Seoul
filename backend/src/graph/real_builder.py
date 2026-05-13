@@ -18,6 +18,7 @@ from langgraph.graph import END, StateGraph
 from src.graph.analysis_node import analysis_node  # pyright: ignore[reportMissingImports]
 from src.graph.booking_node import booking_node  # pyright: ignore[reportMissingImports]
 from src.graph.calendar_node import calendar_node  # pyright: ignore[reportMissingImports]
+from src.graph.cost_estimate_node import cost_estimate_node  # pyright: ignore[reportMissingImports]
 from src.graph.course_plan_node import course_plan_node  # pyright: ignore[reportMissingImports]  # noqa: F401
 from src.graph.crowdedness_node import crowdedness_node  # pyright: ignore[reportMissingImports]
 from src.graph.detail_inquiry_node import detail_inquiry_node  # pyright: ignore[reportMissingImports]  # noqa: F401
@@ -53,6 +54,7 @@ def _route_by_intent(state: AgentState) -> str:
         - BOOKING → "booking"
         - CALENDAR → "calendar"
         - ANALYSIS → "analysis"
+        - COST_ESTIMATE → "cost_estimate"
         - GENERAL (fallback) → "general"
         - Phase 2 intents → "general" (Phase 2에서 확장)
     """
@@ -70,6 +72,7 @@ def _route_by_intent(state: AgentState) -> str:
         "CROWDEDNESS": "crowdedness",
         "IMAGE_SEARCH": "image_search",
         "ANALYSIS": "analysis",
+        "COST_ESTIMATE": "cost_estimate",
     }
     return mapping.get(str(intent), "general")
 
@@ -104,6 +107,7 @@ def build_graph(checkpointer: Optional[Any] = None) -> Any:
     graph.add_node("crowdedness", crowdedness_node)
     graph.add_node("image_search", image_search_node)
     graph.add_node("analysis", analysis_node)
+    graph.add_node("cost_estimate", cost_estimate_node)
     graph.add_node("response_builder", response_builder_node)
 
     # 엣지 설정
@@ -127,6 +131,7 @@ def build_graph(checkpointer: Optional[Any] = None) -> Any:
             "crowdedness": "crowdedness",
             "image_search": "image_search",
             "analysis": "analysis",
+            "cost_estimate": "cost_estimate",
             "general": "general",
         },
     )
@@ -146,6 +151,7 @@ def build_graph(checkpointer: Optional[Any] = None) -> Any:
         "crowdedness",
         "image_search",
         "analysis",
+        "cost_estimate",
     ]:
         graph.add_edge(node_name, "response_builder")
 
