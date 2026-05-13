@@ -11,9 +11,14 @@ from __future__ import annotations
 
 import json
 import logging
+import re
+from datetime import date
 from typing import Any, Optional
 
 logger = logging.getLogger(__name__)
+
+# ISO date "YYYY-MM-DD" 형식 검증 정규식 (Gemini 응답 후처리)
+_ISO_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
 
 # 전처리 생략 대상 intent — GENERAL(대화형) + IMAGE_SEARCH(URL 쿼리, 이미지 노드가 직접 파싱)
 _SKIP_INTENTS: frozenset[str] = frozenset({"GENERAL", "IMAGE_SEARCH"})
@@ -37,6 +42,24 @@ Return a JSON object with these fields:
   Examples: ["분위기 좋은", "조용한"], ["가성비"], ["데이트"]
 - "date_reference": date reference if mentioned, null otherwise (string or null)
   Examples: "이번 주말", "토요일", "내일", "3월"
+- "date_start_resolved": resolved ISO date "YYYY-MM-DD" or null
+  Convert date_reference to absolute date based on today={today}.
+  Examples (today=2026-05-14 목요일):
+    "이번 주말" → start="2026-05-16" (토)
+    "토요일" → start="2026-05-16"
+    "내일" → start="2026-05-15"
+    "3월" → start="2026-03-01"
+    "다음 주" → start="2026-05-18" (월)
+  If date_reference is ambiguous or missing, return null.
+- "date_end_resolved": resolved ISO date "YYYY-MM-DD" or null
+  End date of the range (inclusive). For single-day references, same as start.
+  Examples (today=2026-05-14 목요일):
+    "이번 주말" → end="2026-05-17" (일)
+    "토요일" → end="2026-05-16"
+    "내일" → end="2026-05-15"
+    "3월" → end="2026-03-31"
+    "다음 주" → end="2026-05-24" (일)
+  If date_reference is ambiguous or missing, return null.
 - "time_reference": time reference if mentioned, null otherwise (string or null)
   Examples: "2시", "저녁", "오후"
 - "place_name": specific place name if mentioned in current query or conversation history, null otherwise (string or null)
@@ -54,6 +77,7 @@ async def _extract_query_fields(
     query: str,
     intent: Optional[str] = None,
     conversation_history: Optional[list[dict[str, str]]] = None,
+    current_date: Optional[str] = None,
 ) -> dict[str, Any]:
     """Gemini JSON mode로 쿼리에서 공통 필드 추출.
 
@@ -61,12 +85,16 @@ async def _extract_query_fields(
         query: 사용자 원본 쿼리.
         intent: 분류된 intent (GENERAL이면 생략).
         conversation_history: 이전 대화 이력 (place_name/날짜 등 문맥 파싱용).
+        current_date: 오늘 날짜 (ISO "YYYY-MM-DD"). None이면 date.today() 사용.
+            date_reference → date_start/end_resolved 변환 기준. 테스트 결정성 위해 주입 가능.
 
     Returns:
         공통 필드 dict. 실패 시 빈 dict.
     """
     if intent in _SKIP_INTENTS:
         return {}
+
+    today_str = current_date if current_date else date.today().isoformat()
 
     from langchain_google_genai import ChatGoogleGenerativeAI  # pyright: ignore[reportMissingImports]
 
@@ -84,8 +112,9 @@ async def _extract_query_fields(
             temperature=0,
         )
 
+        system_prompt = _PREPROCESS_SYSTEM_PROMPT.replace("{today}", today_str)
         messages: list[tuple[str, str]] = [
-            ("system", _PREPROCESS_SYSTEM_PROMPT),
+            ("system", system_prompt),
         ]
 
         # 최근 5턴 대화 이력 포함 — place_name/날짜 문맥 파싱에 활용
@@ -119,6 +148,15 @@ async def _extract_query_fields(
         result.setdefault("original_query", query)
         result.setdefault("expanded_query", query)
         result.setdefault("keywords", [])
+
+        # date_*_resolved 보장 + ISO "YYYY-MM-DD" 형식 검증 (Gemini 응답 후처리)
+        # Gemini가 잘못된 형식("2026/05/16", "다음 주" 등) 반환 시 None으로 정정
+        result.setdefault("date_start_resolved", None)
+        result.setdefault("date_end_resolved", None)
+        for key in ("date_start_resolved", "date_end_resolved"):
+            val = result.get(key)
+            if val is not None and (not isinstance(val, str) or not _ISO_DATE_RE.match(val)):
+                result[key] = None
 
         # PII 유출 방지를 위해 결과의 키 목록과 intent만 로깅
         logger.info("query_preprocessor: intent=%s, extracted_keys=%s", intent, list(result.keys()))

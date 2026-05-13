@@ -68,15 +68,20 @@ async def _search_pg(
     district: Optional[str],
     category: Optional[str],
     keywords: list[str],
+    date_start_resolved: Optional[str] = None,
+    date_end_resolved: Optional[str] = None,
 ) -> list[dict[str, Any]]:
-    """events 테이블에서 조건부 필터 검색. is_deleted=FALSE + date_end >= NOW() 강제.
+    """events 테이블에서 조건부 필터 검색. is_deleted=FALSE 강제.
 
-    필터 전략:
-      - is_deleted = FALSE: 소프트 삭제 행사 제외 (불변식 #4, ERD v6.3 §2 #18)
+    필터 전략 (#76 정확도 강화 v1):
+      - is_deleted = FALSE: 소프트 삭제 행사 제외 (불변식 #4)
       - district: 자치구 정확 매칭 ("강남구")
       - category: 카테고리 ILIKE ("%전시회%")
-      - keywords: 첫 번째 키워드로 title 검색 ("%재즈%")
-      - date_end >= NOW(): 지난 행사 자동 제외 (Phase 1 단순화)
+      - keywords: **배열 전체** OR 매칭 — (title ILIKE $a OR title ILIKE $b ...)
+      - date 범위 (둘 다 있을 때): date_end >= $start AND date_start <= $end (overlap)
+      - date 범위 없을 때: date_end >= NOW() (Phase 1 fallback)
+
+    NULL 행사 동작: events.date_start/date_end가 NULL이면 overlap 조건 false → 자연 제외.
 
     SQL 구성 정책 (불변식 #8):
       - f-string SQL 사용 금지
@@ -87,10 +92,20 @@ async def _search_pg(
         "SELECT event_id, title, category, place_name, address, district, "
         "ST_Y(geom::geometry) AS lat, ST_X(geom::geometry) AS lng, "
         "date_start, date_end, price, poster_url, detail_url, summary, source "
-        "FROM events WHERE is_deleted = FALSE AND date_end >= NOW()"
+        "FROM events WHERE is_deleted = FALSE"
     )
     conditions: list[str] = []
     params: list[Any] = []
+
+    # date 범위 — 둘 다 있을 때만 overlap, 아니면 date_end >= NOW() fallback
+    if date_start_resolved and date_end_resolved:
+        params.append(date_start_resolved)
+        start_ph = "$" + str(len(params))
+        params.append(date_end_resolved)
+        end_ph = "$" + str(len(params))
+        conditions.append("date_end >= " + start_ph + " AND date_start <= " + end_ph)
+    else:
+        conditions.append("date_end >= NOW()")
 
     if district:
         params.append(district)
@@ -101,12 +116,14 @@ async def _search_pg(
         conditions.append("category ILIKE $" + str(len(params)))
 
     if keywords:
-        params.append("%" + keywords[0] + "%")
-        conditions.append("title ILIKE $" + str(len(params)))
+        # keywords 배열 전체로 title OR 매칭
+        kw_placeholders: list[str] = []
+        for kw in keywords:
+            params.append("%" + kw + "%")
+            kw_placeholders.append("title ILIKE $" + str(len(params)))
+        conditions.append("(" + " OR ".join(kw_placeholders) + ")")
 
-    sql = base_sql
-    if conditions:
-        sql = sql + " AND " + " AND ".join(conditions)
+    sql = base_sql + " AND " + " AND ".join(conditions)
 
     params.append(_PG_LIMIT)
     sql = sql + " ORDER BY date_start ASC LIMIT $" + str(len(params))
@@ -382,12 +399,14 @@ async def event_recommend_node(state: dict[str, Any]) -> dict[str, Any]:
     district = pq.get("district")
     category = pq.get("category")
     keywords = pq.get("keywords", [])
+    date_start_resolved = pq.get("date_start_resolved")
+    date_end_resolved = pq.get("date_end_resolved")
 
     settings = get_settings()
     pool = get_pool()
 
     # 1) PostgreSQL 검색 (DB 우선)
-    pg_events = await _search_pg(pool, district, category, keywords)
+    pg_events = await _search_pg(pool, district, category, keywords, date_start_resolved, date_end_resolved)
 
     # 2) PG 결과 부족 시 Naver fallback
     naver_events: list[dict[str, Any]] = []
