@@ -119,17 +119,17 @@ async def test_classify_intents_max_3() -> None:
 
 
 # ---------------------------------------------------------------------------
-# classify_intents — Phase 2 → GENERAL fallback
+# classify_intents — 라우팅 불가 intent → GENERAL fallback
 # ---------------------------------------------------------------------------
 
 
 async def test_classify_intents_phase2_filter() -> None:
-    """Phase 2 intent → GENERAL fallback."""
+    """라우팅 불가 intent(FAVORITE) → GENERAL fallback."""
     from src.graph.intent_router_node import IntentType, classify_intents  # pyright: ignore[reportMissingImports]
 
     mock_response = MagicMock()
     mock_response.content = json.dumps(
-        {"intents": [{"intent": "COST_ESTIMATE", "confidence": 0.9, "sub_query": "비용 알려줘"}]}
+        {"intents": [{"intent": "FAVORITE", "confidence": 0.9, "sub_query": "이 식당 저장해줘"}]}
     )
 
     mock_llm = MagicMock()
@@ -139,7 +139,7 @@ async def test_classify_intents_phase2_filter() -> None:
         patch("langchain_google_genai.ChatGoogleGenerativeAI", return_value=mock_llm),
         patch("src.config.get_settings", return_value=_mock_settings()),
     ):
-        result = await classify_intents("비용 알려줘")
+        result = await classify_intents("이 식당 저장해줘")
 
     assert len(result) == 1
     assert result[0][0] == IntentType.GENERAL
