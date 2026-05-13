@@ -10,6 +10,7 @@ from zoneinfo import ZoneInfo
 logger = logging.getLogger(__name__)
 
 _STALE_THRESHOLD_DAYS = 3
+_LEVEL_MAP: dict[str, str] = {"한산": "low", "보통": "medium", "혼잡": "high"}
 
 
 def _classify_level(ratio: float) -> str:
@@ -18,9 +19,7 @@ def _classify_level(ratio: float) -> str:
         return "한산"
     if ratio < 1.2:
         return "보통"
-    if ratio < 1.5:
-        return "혼잡"
-    return "매우혼잡"
+    return "혼잡"
 
 
 async def _resolve_dong_code(
@@ -181,6 +180,32 @@ def _build_crowdedness_blocks(
             "prompt": prompt,
         }
     ]
+
+
+async def fetch_congestion_by_district(
+    pool: Any,
+    district: str,
+) -> Optional[dict[str, Any]]:
+    """district 단위 혼잡도 조회. places 블록 congestion 필드용 (area_proxy).
+
+    Returns:
+        {"level": "low"|"medium"|"high", "updated_at": ISO date str, "source": "area_proxy"}
+        or None when population data is unavailable.
+    """
+    time_slot: int = datetime.now(ZoneInfo("Asia/Seoul")).hour
+    pop = await _fetch_population(pool, None, district, time_slot)
+    if pop is None:
+        return None
+    current_pop = int(pop.get("current_pop") or 0)
+    avg_pop = float(pop.get("avg_pop") or 0)
+    level_ko = "보통" if avg_pop == 0 else _classify_level(current_pop / avg_pop)
+    base_date = pop.get("base_date")
+    updated_at = base_date.isoformat() if base_date is not None else ""
+    return {
+        "level": _LEVEL_MAP.get(level_ko, "medium"),
+        "updated_at": updated_at,
+        "source": "area_proxy",
+    }
 
 
 async def crowdedness_node(state: dict[str, Any]) -> dict[str, Any]:

@@ -233,6 +233,8 @@ def _build_blocks(
             item["lat"] = r["lat"]
         if r.get("lng") is not None:
             item["lng"] = r["lng"]
+        if r.get("congestion"):
+            item["congestion"] = r["congestion"]
         place_items.append(item)
 
     if place_items:
@@ -318,6 +320,24 @@ async def place_search_node(state: dict[str, Any]) -> dict[str, Any]:
 
     # 병합
     results = _merge_results(pg_results, os_results)
+
+    # congestion 주입 (district 기준 area_proxy, 실패 시 무시)
+    try:
+        from src.graph.crowdedness_node import fetch_congestion_by_district  # pyright: ignore[reportMissingImports]
+
+        districts = list({r["district"] for r in results if r.get("district")})
+        if districts:
+            congs = await asyncio.gather(
+                *(fetch_congestion_by_district(pool, d) for d in districts),
+                return_exceptions=True,
+            )
+            cong_map = {d: c for d, c in zip(districts, congs, strict=True) if isinstance(c, dict)}
+            for r in results:
+                d = r.get("district")
+                if d and d in cong_map:
+                    r["congestion"] = cong_map[d]
+    except Exception:
+        logger.warning("congestion fetch skipped")
 
     # 블록 생성
     blocks = _build_blocks(query, results)
