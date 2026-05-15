@@ -152,16 +152,32 @@ async def _search_os(
     os_client: Any,
     query: str,
     api_key: str,
+    district: Optional[str] = None,
 ) -> list[dict[str, Any]]:
-    """places_vector k-NN 검색."""
+    """places_vector k-NN 검색. district 있으면 필터링."""
     try:
         query_vector = await _embed_query_768d(query, api_key)
 
-        body: dict[str, Any] = {
-            "size": _OS_TOP_K,
-            "query": {"knn": {"embedding": {"vector": query_vector, "k": _OS_TOP_K}}},
-            "min_score": _OS_MIN_SCORE,
-        }
+        knn_query: dict[str, Any] = {"knn": {"embedding": {"vector": query_vector, "k": _OS_TOP_K}}}
+
+        # district 필터가 있으면 bool + filter로 지역 제한
+        if district:
+            body: dict[str, Any] = {
+                "size": _OS_TOP_K,
+                "query": {
+                    "bool": {
+                        "must": [knn_query],
+                        "filter": [{"term": {"district": district}}],
+                    }
+                },
+                "min_score": _OS_MIN_SCORE,
+            }
+        else:
+            body = {
+                "size": _OS_TOP_K,
+                "query": knn_query,
+                "min_score": _OS_MIN_SCORE,
+            }
 
         result = await os_client.search(index="places_vector", body=body)
         hits = result.get("hits", {}).get("hits", [])
@@ -184,6 +200,44 @@ async def _search_os(
         return []
 
 
+# 주요 동네 → 자치구 매핑 (코스 검색 지역 필터링용)
+_NEIGHBORHOOD_TO_DISTRICT: dict[str, str] = {
+    "홍대": "마포구",
+    "합정": "마포구",
+    "상수": "마포구",
+    "연남": "마포구",
+    "망원": "마포구",
+    "강남": "강남구",
+    "역삼": "강남구",
+    "신사": "강남구",
+    "압구정": "강남구",
+    "청담": "강남구",
+    "이태원": "용산구",
+    "한남": "용산구",
+    "용산": "용산구",
+    "성수": "성동구",
+    "왕십리": "성동구",
+    "종로": "종로구",
+    "광화문": "종로구",
+    "인사동": "종로구",
+    "북촌": "종로구",
+    "삼청": "종로구",
+    "명동": "중구",
+    "을지로": "중구",
+    "충무로": "중구",
+    "건대": "광진구",
+    "구의": "광진구",
+    "잠실": "송파구",
+    "석촌": "송파구",
+    "여의도": "영등포구",
+    "영등포": "영등포구",
+    "신촌": "서대문구",
+    "연희": "서대문구",
+    "대학로": "종로구",
+    "혜화": "종로구",
+}
+
+
 async def _search_by_categories(
     pool: Any,
     os_client: Optional[Any],
@@ -193,14 +247,24 @@ async def _search_by_categories(
     expanded_query: str,
     api_key: Optional[str],
 ) -> list[dict[str, Any]]:
-    """카테고리별 PG + OS 병렬 검색 → 병합."""
+    """카테고리별 PG + OS 병렬 검색 → 병합. neighborhood로 district 추론."""
+    # neighborhood가 있는데 district가 없으면 매핑 테이블로 추론
+    if neighborhood and not district:
+        for key, val in _NEIGHBORHOOD_TO_DISTRICT.items():
+            if key in neighborhood:
+                district = val
+                break
+
     tasks: list[Any] = []
 
     for cat in categories:
         tasks.append(_search_pg(pool, district, cat, neighborhood))
-        # 카테고리별 OS 검색 — 카테고리 키워드를 포함한 쿼리로 분리
         if os_client and api_key:
-            tasks.append(_search_os(os_client, f"{expanded_query} {cat}", api_key))
+            # OS 검색에 지역명 포함 + district 필터
+            os_query = f"{expanded_query} {cat}"
+            if neighborhood:
+                os_query = f"{neighborhood} {os_query}"
+            tasks.append(_search_os(os_client, os_query, api_key, district))
 
     results = await asyncio.gather(*tasks, return_exceptions=True)
 
@@ -215,6 +279,19 @@ async def _search_by_categories(
             if pid and pid not in seen:
                 seen.add(pid)
                 merged.append(place)
+
+    # neighborhood가 있으면 해당 지역 장소를 우선 정렬
+    if neighborhood:
+
+        def _locality_score(p: dict[str, Any]) -> int:
+            addr = (p.get("address") or "") + (p.get("name") or "")
+            if neighborhood in addr:
+                return 0  # 최우선
+            if district and p.get("district") == district:
+                return 1  # 같은 구
+            return 2  # 나머지
+
+        merged.sort(key=_locality_score)
 
     return merged
 
