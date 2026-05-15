@@ -27,6 +27,11 @@ jobs:
             _upsert_env "GOOGLE_CALENDAR_CLIENT_SECRET" "${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}"
             _upsert_env "GOOGLE_CALENDAR_REDIRECT_URI" "${{ secrets.GOOGLE_CALENDAR_REDIRECT_URI }}"
 
+            # Docker Compose V2 플러그인 자동 설치 (없으면)
+            if ! docker compose version > /dev/null 2>&1; then
+              sudo apt-get update -qq && sudo apt-get install -y -qq docker-compose-plugin
+            fi
+
             # Docker 빌드 + 재시작
             cd backend
             docker compose build api
