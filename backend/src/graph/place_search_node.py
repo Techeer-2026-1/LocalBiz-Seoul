@@ -285,6 +285,9 @@ def _build_blocks(
         desc = descriptions.get(r.get("place_id", ""))
         if desc:
             item["summary"] = desc
+        from src.models.blocks import attach_map_urls  # pyright: ignore[reportMissingImports]
+
+        attach_map_urls(item)
         place_items.append(item)
 
     if place_items:

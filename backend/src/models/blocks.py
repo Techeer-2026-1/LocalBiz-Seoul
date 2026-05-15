@@ -15,6 +15,7 @@ SSE 제어 이벤트 (런타임 한정, messages 미저장):
 from __future__ import annotations
 
 from typing import Any, Optional
+from urllib.parse import quote
 
 from pydantic import BaseModel, Field
 
@@ -75,6 +76,8 @@ class PlaceBlock(BaseModel):
     rating: Optional[float] = None
     image_url: Optional[str] = None
     summary: Optional[str] = None  # LLM 요약 (선택)
+    naver_map_url: Optional[str] = None  # 런타임 생성 (네이버 지도 검색)
+    kakao_map_url: Optional[str] = None  # 런타임 생성 (카카오맵 검색)
     congestion: Optional[CongestionInfo] = None
 
 
@@ -399,3 +402,23 @@ def deserialize_block(data: dict[str, Any]) -> BaseModel:
     if cls is None:
         raise ValueError(f"알 수 없는 블록 type: {block_type!r}")
     return cls.model_validate(data)
+
+
+# ---------------------------------------------------------------------------
+# 유틸: place 블록에 지도 검색 URL 부착
+# ---------------------------------------------------------------------------
+def attach_map_urls(place_dict: dict[str, Any]) -> dict[str, Any]:
+    """place 블록 dict에 naver_map_url, kakao_map_url을 런타임 생성하여 추가.
+
+    DB 변경 없이 장소명 기반 검색 URL 패턴 사용.
+    이미 URL이 있으면 덮어쓰지 않음.
+    """
+    name = place_dict.get("name", "")
+    if not name:
+        return place_dict
+    encoded = quote(name)
+    if not place_dict.get("naver_map_url"):
+        place_dict["naver_map_url"] = f"https://map.naver.com/v5/search/{encoded}"
+    if not place_dict.get("kakao_map_url"):
+        place_dict["kakao_map_url"] = f"https://map.kakao.com/?q={encoded}"
+    return place_dict

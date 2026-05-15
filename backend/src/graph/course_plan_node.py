@@ -478,6 +478,9 @@ def _build_blocks(
             "transit_to_next": transit_to_next,
             "recommendation_reason": detail.get("recommendation_reason"),
         }
+        from src.models.blocks import attach_map_urls  # pyright: ignore[reportMissingImports]
+
+        attach_map_urls(stop["place"])
         course_stops.append(stop)
 
     blocks.append(
