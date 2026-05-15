@@ -55,9 +55,13 @@ def _extract_search_term(
 ) -> str:
     """processed_query에서 장소 검색어를 추출.
 
-    우선순위: keywords[0] → expanded_query → neighborhood → 원본 query.
-    DETAIL_INQUIRY는 특정 장소명 매칭이 목적이므로 keywords(장소명)를 우선.
+    우선순위: place_name → keywords[0] → expanded_query → neighborhood → 원본 query.
+    place_name은 대화 맥락에서 해소된 장소명 (예: "거기" → "스타벅스 강남점").
     """
+    place_name: Optional[str] = processed_query.get("place_name")
+    if place_name and place_name.strip():
+        return place_name.strip()
+
     keywords: list[str] = processed_query.get("keywords", [])
     if keywords and keywords[0].strip():
         return keywords[0].strip()

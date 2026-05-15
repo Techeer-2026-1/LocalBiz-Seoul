@@ -203,9 +203,9 @@ async def _load_history_from_db(thread_id: str) -> list[dict[str, str]]:
             except Exception:
                 continue
 
-        # blocks에서 텍스트 추출
+        # blocks에서 텍스트 + 구조화된 엔티티 이름 추출
         # user: type=="text" 블록의 content
-        # assistant: type=="text_stream" 블록의 content (Gemini 스트리밍 결과)
+        # assistant: text_stream content + places/events/course 블록의 엔티티 이름
         text_parts: list[str] = []
         for block in blocks if isinstance(blocks, list) else []:
             if not isinstance(block, dict):
@@ -215,6 +215,27 @@ async def _load_history_from_db(thread_id: str) -> list[dict[str, str]]:
                 text_parts.append(block.get("content", ""))
             elif btype == "text_stream" and role == "assistant":
                 text_parts.append(block.get("content", ""))
+            elif btype == "place" and role == "assistant":
+                name = block.get("name", "")
+                if name:
+                    text_parts.append(f"[장소: {name}]")
+            elif btype == "places" and role == "assistant":
+                for item in block.get("items", []):
+                    name = item.get("name", "") if isinstance(item, dict) else ""
+                    if name:
+                        text_parts.append(f"[장소: {name}]")
+            elif btype == "events" and role == "assistant":
+                for item in block.get("items", []):
+                    title = item.get("title", "") if isinstance(item, dict) else ""
+                    if title:
+                        text_parts.append(f"[행사: {title}]")
+            elif btype == "course" and role == "assistant":
+                for stop in block.get("stops", []):
+                    if isinstance(stop, dict):
+                        place = stop.get("place", {})
+                        name = place.get("name", "") if isinstance(place, dict) else ""
+                        if name:
+                            text_parts.append(f"[코스 장소: {name}]")
 
         content = " ".join(t for t in text_parts if t).strip()
         if content:
