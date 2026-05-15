@@ -27,9 +27,15 @@ jobs:
             _upsert_env "GOOGLE_CALENDAR_CLIENT_SECRET" "${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}"
             _upsert_env "GOOGLE_CALENDAR_REDIRECT_URI" "${{ secrets.GOOGLE_CALENDAR_REDIRECT_URI }}"
 
-            # Docker Compose V2 플러그인 자동 설치 (없으면)
+            # Docker 공식 apt repo 등록 + Compose V2 설치 (1회성, 이후 apt upgrade로 관리)
             if ! docker compose version > /dev/null 2>&1; then
-              sudo apt-get update -qq && sudo apt-get install -y -qq docker-compose-plugin
+              sudo install -m 0755 -d /etc/apt/keyrings
+              sudo curl -fsSL https://download.docker.com/linux/ubuntu/gpg -o /etc/apt/keyrings/docker.asc
+              sudo chmod a+r /etc/apt/keyrings/docker.asc
+              echo "deb [arch=$(dpkg --print-architecture) signed-by=/etc/apt/keyrings/docker.asc] https://download.docker.com/linux/ubuntu $(. /etc/os-release && echo "$VERSION_CODENAME") stable" | sudo tee /etc/apt/sources.list.d/docker.list > /dev/null
+              sudo apt-get update -qq
+              sudo apt-get install -y -qq docker-compose-plugin
+              docker compose version
             fi
 
             # Docker 빌드 + 재시작
