@@ -29,10 +29,12 @@ logger = logging.getLogger(__name__)
 
 _COURSE_SYSTEM_PROMPT = (
     "당신은 서울 로컬 라이프 AI 챗봇 'AnyWay'입니다. "
-    "자기소개나 인사로 시작하지 말고 바로 본론으로 답변하세요. "
-    "사용자의 코스 추천 결과를 친절하게 소개해주세요. "
-    "각 장소의 추천 이유와 이동 동선을 자연스럽게 설명하고, "
-    "소요 시간과 팁도 포함해주세요."
+    "자기소개나 인사로 시작하지 말고 바로 본론으로 답변하세요.\n\n"
+    "## 절대 규칙\n"
+    "- 코스의 각 장소는 카드로 이미 소개되었습니다.\n"
+    "- 개별 장소를 하나씩 설명하지 마세요. 번호 매기기 금지.\n"
+    "- 코스 전체의 테마와 매력을 2-3문장으로만 요약하세요.\n"
+    "- 핵심 키워드는 **굵게** 강조하세요."
 )
 
 _MAX_STOPS = 5
@@ -281,6 +283,7 @@ JSON으로만 응답하세요:
       "order": 1,
       "arrival_time": "HH:mm (예: 11:00)",
       "duration_min": 체류시간(분),
+      "summary": "장소 한줄 소개 (15자 이내, 예: '감성 빈티지 카페')",
       "recommendation_reason": "추천 이유 한 줄",
       "transit_mode": "walk|subway|bus|taxi (다음 장소까지 이동 수단)"
     }
@@ -400,7 +403,7 @@ def _build_blocks(
     stop_details: list[dict[str, Any]],
     course_id: str,
 ) -> list[dict[str, Any]]:
-    """text_stream + course + map_route 블록 생성."""
+    """course + text_stream(종합 요약) + map_route 블록 생성."""
     blocks: list[dict[str, Any]] = []
 
     # fallback 적용
@@ -412,20 +415,7 @@ def _build_blocks(
     if not description:
         description = f"{len(route)}곳을 둘러보는 코스"
 
-    # --- text_stream ---
-    stop_summary = "\n".join(
-        f"- {route[i].get('name', '')} ({route[i].get('category', '')})" for i in range(len(route))
-    )
-    prompt = (
-        f"사용자 질문: {query}\n\n"
-        f"코스 제목: {title}\n"
-        f"코스 설명: {description}\n\n"
-        f"경유 장소:\n{stop_summary}\n\n"
-        "위 코스를 친절하게 소개해주세요. 각 장소의 특징과 동선을 설명해주세요."
-    )
-    blocks.append({"type": "text_stream", "system": _COURSE_SYSTEM_PROMPT, "prompt": prompt})
-
-    # --- course 블록 ---
+    # --- course 블록 (카드 먼저 전송) ---
     total_distance_m = 0
     total_stay_min = 0
     total_transit_min = 0
@@ -483,6 +473,7 @@ def _build_blocks(
                 "location": {"lat": place["lat"], "lng": place["lng"]}
                 if place.get("lat") is not None and place.get("lng") is not None
                 else None,
+                "summary": detail.get("summary"),
             },
             "transit_to_next": transit_to_next,
             "recommendation_reason": detail.get("recommendation_reason"),
@@ -502,6 +493,16 @@ def _build_blocks(
             "stops": course_stops,
         }
     )
+
+    # --- text_stream (종합 요약, 카드 뒤에 스트리밍) ---
+    prompt = (
+        f"사용자 질문: {query}\n\n"
+        f"코스 제목: {title}\n"
+        f"코스 설명: {description}\n"
+        f"경유 장소 수: {len(route)}곳\n\n"
+        "위 코스의 전체 테마와 매력을 2-3문장으로 요약해주세요."
+    )
+    blocks.append({"type": "text_stream", "system": _COURSE_SYSTEM_PROMPT, "prompt": prompt})
 
     # --- map_route 블록 ---
     markers: list[dict[str, Any]] = []
