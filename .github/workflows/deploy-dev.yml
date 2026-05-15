@@ -28,10 +28,10 @@ jobs:
             _upsert_env "GOOGLE_CALENDAR_CLIENT_SECRET" "${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}"
             _upsert_env "GOOGLE_CALENDAR_REDIRECT_URI" "${{ secrets.GOOGLE_CALENDAR_REDIRECT_URI }}"
 
-            # Docker 공식 apt repo 등록 + Compose V2 설치 (1회성, 이후 apt upgrade로 관리)
+            # Docker 공식 apt repo 등록 + Compose V2 설치 (1회성)
             if ! docker compose version > /dev/null 2>&1; then
               . /etc/os-release
-              DISTRO="$ID"  # debian 또는 ubuntu
+              DISTRO="$ID"
               sudo install -m 0755 -d /etc/apt/keyrings
               sudo curl -fsSL "https://download.docker.com/linux/${DISTRO}/gpg" -o /etc/apt/keyrings/docker.asc
               sudo chmod a+r /etc/apt/keyrings/docker.asc
@@ -41,8 +41,13 @@ jobs:
               docker compose version
             fi
 
-            # Docker 빌드 + 재시작
+            # 기존 서비스 정리 — systemd(bare VM) 또는 이전 Docker 컨테이너
+            sudo systemctl stop localbiz-api 2>/dev/null || true
+            sudo systemctl disable localbiz-api 2>/dev/null || true
             cd backend
+            docker compose down 2>/dev/null || true
+
+            # Docker 빌드 + 시작 (DB 컨테이너 제외 — 프로덕션은 Cloud SQL + 별도 GCE OpenSearch)
             docker compose build api
             docker compose up -d --no-deps api
 
