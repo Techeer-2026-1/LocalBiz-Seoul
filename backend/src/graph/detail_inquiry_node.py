@@ -147,6 +147,9 @@ def _build_detail_blocks(
     if place_row.get("lng") is not None:
         place_block["lng"] = place_row["lng"]
 
+    from src.models.blocks import attach_map_urls  # pyright: ignore[reportMissingImports]
+
+    attach_map_urls(place_block)
     blocks.append(place_block)
 
     return blocks

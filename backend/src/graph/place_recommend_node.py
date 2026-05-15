@@ -428,6 +428,9 @@ def _build_blocks(
         reason = reasons.get(pid)
         if reason:
             item["summary"] = reason
+        from src.models.blocks import attach_map_urls  # pyright: ignore[reportMissingImports]
+
+        attach_map_urls(item)
         place_items.append(item)
 
     # places 블록은 항상 반환 (빈 배열 포함 — 블록 순서 검증 일관성)

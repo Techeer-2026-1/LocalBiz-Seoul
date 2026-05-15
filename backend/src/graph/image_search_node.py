@@ -640,6 +640,9 @@ def _place_to_block(place: dict[str, Any]) -> dict[str, Any]:
         block["lat"] = place["lat"]
     if place.get("lng") is not None:
         block["lng"] = place["lng"]
+    from src.models.blocks import attach_map_urls  # pyright: ignore[reportMissingImports]
+
+    attach_map_urls(block)
     return block
 
 
