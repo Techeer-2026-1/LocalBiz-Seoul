@@ -52,14 +52,6 @@ services:
       - "8000:8000"
     env_file:
       - .env
-    environment:
-      DB_HOST: postgres
-      DB_PORT: "5432"
-      DB_NAME: localbiz
-      DB_USER: localbiz
-      DB_PASSWORD: localbiz
-      OPENSEARCH_HOST: opensearch
-      OPENSEARCH_PORT: "9200"
     depends_on:
       postgres:
         condition: service_healthy
