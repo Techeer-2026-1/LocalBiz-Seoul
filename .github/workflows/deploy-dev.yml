@@ -20,12 +20,26 @@ jobs:
             git fetch origin dev
             git checkout dev
             git pull origin dev
-            source venv/bin/activate
-            pip install -q -r backend/requirements.txt
+
+            # .env 시크릿 갱신
             _upsert_env() { local k="$1" v="$2" f="backend/.env"; local escaped; escaped=$(printf '%s\n' "$v" | sed 's/[&/\]/\\&/g'); grep -q "^${k}=" "$f" 2>/dev/null && sed -i "s|^${k}=.*|${k}=${escaped}|" "$f" || echo "${k}=${v}" >> "$f"; }
             _upsert_env "GOOGLE_CALENDAR_CLIENT_ID" "${{ secrets.GOOGLE_CALENDAR_CLIENT_ID }}"
             _upsert_env "GOOGLE_CALENDAR_CLIENT_SECRET" "${{ secrets.GOOGLE_CALENDAR_CLIENT_SECRET }}"
             _upsert_env "GOOGLE_CALENDAR_REDIRECT_URI" "${{ secrets.GOOGLE_CALENDAR_REDIRECT_URI }}"
-            if [ -n "${{ secrets.FRONTEND_BASE_URL }}" ]; then _upsert_env "FRONTEND_BASE_URL" "${{ secrets.FRONTEND_BASE_URL }}"; fi
-            sudo systemctl restart localbiz-api
-            if command -v nginx >/dev/null 2>&1; then sudo nginx -t && sudo systemctl reload nginx; fi
+
+            # Docker 빌드 + 재시작
+            cd backend
+            docker compose build api
+            docker compose up -d api
+
+            # 헬스체크 대기 (최대 60초)
+            for i in $(seq 1 30); do
+              if curl -sf http://localhost:8000/health > /dev/null 2>&1; then
+                echo "Health check passed"
+                exit 0
+              fi
+              sleep 2
+            done
+            echo "Health check failed after 60s"
+            docker compose logs --tail=50 api
+            exit 1
