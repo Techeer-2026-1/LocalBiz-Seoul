@@ -4,6 +4,7 @@
 CREATE TABLE IF NOT EXISTS place_bookmarks (
     bookmark_id       BIGSERIAL PRIMARY KEY,
     user_id           BIGINT NOT NULL REFERENCES users(user_id),
+    -- VARCHAR(100): 이미지 검색 GP fallback이 gp_{google_place_id} 형태로 저장 → UUID(36)보다 길 수 있음. FK 미설정도 동일 이유.
     place_id          VARCHAR(100) NOT NULL,
     name              VARCHAR(200) NOT NULL,
     category          VARCHAR(50),
